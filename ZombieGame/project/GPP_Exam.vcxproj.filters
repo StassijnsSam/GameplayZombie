@@ -3,15 +3,12 @@
   <ItemGroup>
     <ClCompile Include="Plugin.cpp" />
     <ClCompile Include="stdafx.cpp" />
-    <ClCompile Include="SteeringBehaviors.cpp" />
     <ClCompile Include="EBehaviorTree.cpp" />
     <ClCompile Include="Inventory.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Plugin.h" />
     <ClInclude Include="stdafx.h" />
-    <ClInclude Include="SteeringBehaviors.h" />
-    <ClInclude Include="SteeringHelpers.h" />
     <ClInclude Include="EDecisionMaking.h" />
     <ClInclude Include="Behaviors.h" />
     <ClInclude Include="EBehaviorTree.h" />

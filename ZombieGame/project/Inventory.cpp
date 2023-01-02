@@ -243,5 +243,5 @@ bool Inventory::UseItemOfType(eItemType itemType)
 		}
 		break;
 	}
-	
+	return true;
 }

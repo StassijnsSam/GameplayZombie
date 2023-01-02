@@ -189,3 +189,59 @@ bool Inventory::PickupItem(EntityInfo item)
 		}
 	}
 }
+
+bool Inventory::UseItemOfType(eItemType itemType)
+{
+	if (!ContainsItemOfType(itemType)) {
+		return false;
+	}
+
+	auto itemIterator = std::find_if(m_Items.begin(), m_Items.end(), [itemType](ItemInfo item) {
+		return item.Type == itemType;
+		});
+
+	UINT index = std::distance(m_Items.begin(), itemIterator);
+	ItemInfo itemInfo{};
+
+	bool itemUsed = m_pInterface->Inventory_UseItem(index);
+
+	if (!itemUsed) {
+		return false;
+	}
+
+	//Check if you fully used the item and drop it if it is empty
+	m_pInterface->Inventory_GetItem(index, itemInfo);
+
+	switch (itemInfo.Type)
+	{
+	case eItemType::PISTOL:
+	case eItemType::SHOTGUN:
+		//If you used your last ammo from weapon, drop it
+		if (m_pInterface->Weapon_GetAmmo(itemInfo) <= 0) {
+			m_pInterface->Inventory_RemoveItem(index);
+			ItemInfo emptyItem{};
+			emptyItem.Type = eItemType::RANDOM_DROP;
+			m_Items.at(index) = emptyItem;
+		}
+		break;
+	case eItemType::MEDKIT:
+		//If you used your medkit fully, drop it
+		if (m_pInterface->Medkit_GetHealth(itemInfo) <= 0) {
+			m_pInterface->Inventory_RemoveItem(index);
+			ItemInfo emptyItem{};
+			emptyItem.Type = eItemType::RANDOM_DROP;
+			m_Items.at(index) = emptyItem;
+		}
+		break;
+	case eItemType::FOOD:
+		//If you used all the energy from the food, delete it from your inventories
+		if (m_pInterface->Food_GetEnergy(itemInfo) <= 0) {
+			m_pInterface->Inventory_RemoveItem(index);
+			ItemInfo emptyItem{};
+			emptyItem.Type = eItemType::RANDOM_DROP;
+			m_Items.at(index) = emptyItem;
+		}
+		break;
+	}
+	
+}

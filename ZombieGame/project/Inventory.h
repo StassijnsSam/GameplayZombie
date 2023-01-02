@@ -23,6 +23,7 @@ public:
 	UINT GetFreeSlot() const;
 	bool ContainsItemOfType(eItemType itemType) const;
 	bool PickupItem(EntityInfo item);
+	bool UseItemOfType(eItemType itemType);
 
 private:
 	//Size could be a non constant in case you can pick up extra backpacks with storage space etc

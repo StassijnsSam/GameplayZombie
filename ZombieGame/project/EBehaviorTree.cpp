@@ -9,7 +9,6 @@
 //SELECTOR
 BehaviorState BehaviorSelector::Execute(Blackboard* pBlackBoard)
 {
-	//TODO: Fill in this code
 	// Loop over all children in m_ChildBehaviors
 	for (auto& child : m_ChildBehaviors) {
 		//Every Child: Execute and store the result in m_CurrentState
@@ -48,7 +47,6 @@ BehaviorState BehaviorSelector::Execute(Blackboard* pBlackBoard)
 //SEQUENCE
 BehaviorState BehaviorSequence::Execute(Blackboard* pBlackBoard)
 {
-	//TODO: FIll in this code
 	//Loop over all children in m_ChildBehaviors
 	for (auto& child : m_ChildBehaviors) {
 		//Every Child: Execute and store the result in m_CurrentState

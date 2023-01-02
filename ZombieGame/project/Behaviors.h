@@ -87,10 +87,47 @@ namespace BT_Actions
 		pBlackboard->ChangeData("SteeringOutput", steering);
 		return BehaviorState::Success;
 	}
+
+	BehaviorState EscapePurgeZone(Blackboard* pBlackboard) {
+		AgentInfo playerInfo{};
+		PurgeZoneInfo currentPurgeZone{};
+
+		bool dataFound = pBlackboard->GetData("CurrentPurgeZone", currentPurgeZone) &&
+			pBlackboard->GetData("PlayerInfo", playerInfo);
+
+		if (dataFound == false) {
+			return BehaviorState::Failure;
+		}
+
+		pBlackboard->ChangeData("Target", currentPurgeZone.Center);
+		pBlackboard->ChangeData("CanRun", true);
+		
+		return BehaviorState::Success;
+	}
 }
 
 namespace BT_Conditions
 {
-	
+	bool IsInPurgeZone(Blackboard* pBlackboard) {
+		std::vector<PurgeZoneInfo> purgeZonesInFOV{};
+		AgentInfo playerInfo{};
+		
+		bool dataFound = pBlackboard->GetData("PurgeZonesInFOV", purgeZonesInFOV)&&
+			pBlackboard->GetData("PlayerInfo", playerInfo);
+
+		//If its not found or the vector is empty, there are no purge zones nearby
+		if (dataFound == false || purgeZonesInFOV.empty()) {
+			return false;
+		}
+
+		for (const PurgeZoneInfo& purgeZone : purgeZonesInFOV) {
+			if (Elite::DistanceSquared(purgeZone.Center, playerInfo.Position) < purgeZone.Radius * purgeZone.Radius) {
+				//You are inside a purge zone right now
+				pBlackboard->ChangeData("CurrentPurgeZone", purgeZone);
+				return true;
+			}
+		}
+		return false;
+	}
 }
 #endif

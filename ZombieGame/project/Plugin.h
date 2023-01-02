@@ -46,6 +46,7 @@ private:
 
 	std::vector<EntityInfo> m_ItemsInFOV{};
 	std::vector<EntityInfo> m_EnemiesInFOV{};
+	std::vector<EntityInfo> m_PurgeZonesInFOV{};
 	std::vector<HouseInfo> m_HousesInFOV{};
 
 };

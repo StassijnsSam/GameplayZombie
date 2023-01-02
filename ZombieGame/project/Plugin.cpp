@@ -28,14 +28,22 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	//Create blackboard
 	m_pBlackboard = new Blackboard();
 	//Add blackboard data
+
 	m_pBlackboard->AddData("Interface", m_pInterface);
 	m_pBlackboard->AddData("PlayerInfo", m_pInterface->Agent_GetInfo());
 	m_pBlackboard->AddData("WorldInfo", m_pInterface->World_GetInfo());
 	m_pBlackboard->AddData("SteeringOutput", SteeringPlugin_Output{});
 	m_pBlackboard->AddData("Inventory", m_pInventory);
+
+	//FOV
 	m_pBlackboard->AddData("HousesInFOV", m_HousesInFOV);
 	m_pBlackboard->AddData("EnemiesInFOV", m_EnemiesInFOV);
 	m_pBlackboard->AddData("ItemsInFOV", m_ItemsInFOV);
+
+	//Purge zone
+	m_pBlackboard->AddData("PurgeZonesInFOV", m_PurgeZonesInFOV);
+	m_pBlackboard->AddData("CurrentPurgeZone", PurgeZoneInfo{});
+
 	m_pBlackboard->AddData("CanRun", m_CanRun);
 	m_pBlackboard->AddData("Target", Elite::Vector2{0, 0});
 
@@ -43,6 +51,14 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBehaviorTree = new BehaviorTree(m_pBlackboard,
 		//Root
 		new BehaviorSelector({
+			//Run from purge zone
+			new BehaviorSequence({
+				new BehaviorConditional(BT_Conditions::IsInPurgeZone),
+				new BehaviorAction(BT_Actions::EscapePurgeZone),
+				new BehaviorAction(BT_Actions::Flee)
+			}),
+			//Use items needed to survive
+
 			//Seek
 			new BehaviorAction(BT_Actions::Seek)
 			})

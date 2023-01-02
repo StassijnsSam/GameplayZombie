@@ -9,18 +9,17 @@
 
 /* --- Data --- */
 //General Interface
-namespace Elite
+
+class IDecisionMaking
 {
-	class IDecisionMaking
-	{
-	public:
-		IDecisionMaking() = default;
-		virtual ~IDecisionMaking() = default;
+public:
+	IDecisionMaking() = default;
+	virtual ~IDecisionMaking() = default;
 
-		virtual void Update(float deltaT) = 0;
+	virtual void Update(float deltaT) = 0;
 
-	};
-}
+};
+
 
 /* --- Data --- */
 //Blackboard

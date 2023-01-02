@@ -1,7 +1,6 @@
 //=== General Includes ===
 #include "stdafx.h"
 #include "EBehaviorTree.h"
-using namespace Elite;
 
 //-----------------------------------------------------------------
 // BEHAVIOR TREE COMPOSITES (IBehavior)

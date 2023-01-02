@@ -4,6 +4,8 @@
 
 class IBaseInterface;
 class IExamInterface;
+class Blackboard;
+class BehaviorTree;
 
 class Plugin :public IExamPlugin
 {
@@ -35,6 +37,14 @@ private:
 	float m_AngSpeed = 0.f; //Demo purpose
 
 	UINT m_InventorySlot = 0;
+
+	//Added member variables
+	Blackboard* m_pBlackboard{ nullptr };
+	BehaviorTree* m_pBehaviorTree{nullptr};
+
+	std::vector<EntityInfo> m_ItemsInFOV{};
+	std::vector<EntityInfo> m_EnemiesInFOV{};
+	std::vector<HouseInfo> m_HousesInFOV{};
 };
 
 //ENTRY

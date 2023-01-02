@@ -1,6 +1,10 @@
 #include "stdafx.h"
 #include "Plugin.h"
 #include "IExamInterface.h"
+#include "EBlackboard.h"
+#include "EBehaviorTree.h"
+#include "Behaviors.h"
+#include "EDecisionMaking.h"
 
 using namespace std;
 
@@ -14,9 +18,29 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	//Bit information about the plugin
 	//Please fill this in!!
 	info.BotName = "MinionExam";
-	info.Student_FirstName = "Foo";
-	info.Student_LastName = "Bar";
-	info.Student_Class = "2DAEx";
+	info.Student_FirstName = "Sam";
+	info.Student_LastName = "Stassijns";
+	info.Student_Class = "2DAE08";
+	
+
+	//Create blackboard
+	m_pBlackboard = new Blackboard();
+	//Add blackboard data
+	m_pBlackboard->AddData("interface", m_pInterface);
+	m_pBlackboard->AddData("playerInfo", m_pInterface->Agent_GetInfo());
+	m_pBlackboard->AddData("worldInfo", m_pInterface->World_GetInfo());
+	m_pBlackboard->AddData("steeringOutput", SteeringPlugin_Output{});
+	m_pBlackboard->AddData("housesInFOV", m_HousesInFOV);
+	m_pBlackboard->AddData("enemiesInFOV", m_EnemiesInFOV);
+	m_pBlackboard->AddData("itemsInFOV", m_ItemsInFOV);
+	m_pBlackboard->AddData("target", Elite::Vector2{ 0, 0 });
+
+	//Create behaviorTree
+	m_pBehaviorTree = new BehaviorTree(m_pBlackboard,
+		//Root
+		nullptr
+	);
+
 }
 
 //Called only once
@@ -28,7 +52,8 @@ void Plugin::DllInit()
 //Called only once
 void Plugin::DllShutdown()
 {
-	//Called wheb the plugin gets unloaded
+	SAFE_DELETE(m_pBlackboard);
+	SAFE_DELETE(m_pBehaviorTree);
 }
 
 //Called only once, during initialization

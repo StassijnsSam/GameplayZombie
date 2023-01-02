@@ -4,6 +4,7 @@
 #include "EBlackboard.h"
 #include "EBehaviorTree.h"
 #include "Behaviors.h"
+#include "Inventory.h"
 
 using namespace std;
 
@@ -21,7 +22,9 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	info.Student_LastName = "Stassijns";
 	info.Student_Class = "2DAE08";
 	
-
+	//Create inventory
+	//Interface, max gun amount, max medkit amount, max food amount, min gun ammo amount (to reject), min medkit charge amount, min food energy amount
+	m_pInventory = new Inventory(m_pInterface, 2, 2, 1, 2, 2, 2);
 	//Create blackboard
 	m_pBlackboard = new Blackboard();
 	//Add blackboard data
@@ -29,6 +32,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBlackboard->AddData("PlayerInfo", m_pInterface->Agent_GetInfo());
 	m_pBlackboard->AddData("WorldInfo", m_pInterface->World_GetInfo());
 	m_pBlackboard->AddData("SteeringOutput", SteeringPlugin_Output{});
+	m_pBlackboard->AddData("Inventory", m_pInventory);
 	m_pBlackboard->AddData("HousesInFOV", m_HousesInFOV);
 	m_pBlackboard->AddData("EnemiesInFOV", m_EnemiesInFOV);
 	m_pBlackboard->AddData("ItemsInFOV", m_ItemsInFOV);
@@ -55,6 +59,7 @@ void Plugin::DllInit()
 //Called only once
 void Plugin::DllShutdown()
 {
+	SAFE_DELETE(m_pInventory);
 	SAFE_DELETE(m_pBehaviorTree);
 	//BehaviorTree takes ownership of passed blackboard, so no need to delete here
 }

@@ -6,6 +6,7 @@ class IBaseInterface;
 class IExamInterface;
 class Blackboard;
 class BehaviorTree;
+class Inventory;
 
 class Plugin :public IExamPlugin
 {
@@ -41,6 +42,7 @@ private:
 	//Added member variables
 	Blackboard* m_pBlackboard{ nullptr };
 	BehaviorTree* m_pBehaviorTree{nullptr};
+	Inventory* m_pInventory{ nullptr };
 
 	std::vector<EntityInfo> m_ItemsInFOV{};
 	std::vector<EntityInfo> m_EnemiesInFOV{};

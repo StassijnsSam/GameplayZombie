@@ -30,7 +30,6 @@ BehaviorState BehaviorSelector::Execute(Blackboard* pBlackBoard)
 		//if (m_CurrentState != BehaviorState::Failure) {
 		//	return m_CurrentState;
 		//}
-
 		//option 3
 		switch (m_CurrentState) {
 		default:

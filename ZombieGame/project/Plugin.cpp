@@ -4,7 +4,6 @@
 #include "EBlackboard.h"
 #include "EBehaviorTree.h"
 #include "Behaviors.h"
-#include "EDecisionMaking.h"
 
 using namespace std;
 
@@ -26,19 +25,23 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	//Create blackboard
 	m_pBlackboard = new Blackboard();
 	//Add blackboard data
-	m_pBlackboard->AddData("interface", m_pInterface);
-	m_pBlackboard->AddData("playerInfo", m_pInterface->Agent_GetInfo());
-	m_pBlackboard->AddData("worldInfo", m_pInterface->World_GetInfo());
-	m_pBlackboard->AddData("steeringOutput", SteeringPlugin_Output{});
-	m_pBlackboard->AddData("housesInFOV", m_HousesInFOV);
-	m_pBlackboard->AddData("enemiesInFOV", m_EnemiesInFOV);
-	m_pBlackboard->AddData("itemsInFOV", m_ItemsInFOV);
-	m_pBlackboard->AddData("target", Elite::Vector2{ 0, 0 });
+	m_pBlackboard->AddData("Interface", m_pInterface);
+	m_pBlackboard->AddData("PlayerInfo", m_pInterface->Agent_GetInfo());
+	m_pBlackboard->AddData("WorldInfo", m_pInterface->World_GetInfo());
+	m_pBlackboard->AddData("SteeringOutput", SteeringPlugin_Output{});
+	m_pBlackboard->AddData("HousesInFOV", m_HousesInFOV);
+	m_pBlackboard->AddData("EnemiesInFOV", m_EnemiesInFOV);
+	m_pBlackboard->AddData("ItemsInFOV", m_ItemsInFOV);
+	m_pBlackboard->AddData("CanRun", m_CanRun);
+	m_pBlackboard->AddData("Target", Elite::Vector2{0, 0});
 
 	//Create behaviorTree
 	m_pBehaviorTree = new BehaviorTree(m_pBlackboard,
 		//Root
-		nullptr
+		new BehaviorSelector({
+			//Seek
+			new BehaviorAction(BT_Actions::Seek)
+			})
 	);
 
 }
@@ -52,8 +55,8 @@ void Plugin::DllInit()
 //Called only once
 void Plugin::DllShutdown()
 {
-	SAFE_DELETE(m_pBlackboard);
 	SAFE_DELETE(m_pBehaviorTree);
+	//BehaviorTree takes ownership of passed blackboard, so no need to delete here
 }
 
 //Called only once, during initialization
@@ -143,80 +146,28 @@ void Plugin::Update(float dt)
 //This function calculates the new SteeringOutput, called once per frame
 SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 {
-	auto steering = SteeringPlugin_Output();
-	
-	//Use the Interface (IAssignmentInterface) to 'interface' with the AI_Framework
-	auto agentInfo = m_pInterface->Agent_GetInfo();
+	//Clear all the data
+	m_HousesInFOV.clear();
+	m_ItemsInFOV.clear();
+	m_EnemiesInFOV.clear();
+	m_pBlackboard->ChangeData("CanRun", false);
 
+	//Fill in the new data
+	AgentInfo agentInfo = m_pInterface->Agent_GetInfo();
+	m_pBlackboard->ChangeData("PlayerInfo", agentInfo);
 
-	//Use the navmesh to calculate the next navmesh point
-	//auto nextTargetPos = m_pInterface->NavMesh_GetClosestPathPoint(checkpointLocation);
+	//Update the behaviorTree (with the new data)
+	m_pBehaviorTree->Update(dt);
 
-	//OR, Use the mouse target
-	auto nextTargetPos = m_pInterface->NavMesh_GetClosestPathPoint(m_Target); //Uncomment this to use mouse position as guidance
-
-	auto vHousesInFOV = GetHousesInFOV();//uses m_pInterface->Fov_GetHouseByIndex(...)
-	auto vEntitiesInFOV = GetEntitiesInFOV(); //uses m_pInterface->Fov_GetEntityByIndex(...)
-
-	for (auto& e : vEntitiesInFOV)
-	{
-		if (e.Type == eEntityType::PURGEZONE)
-		{
-			PurgeZoneInfo zoneInfo;
-			m_pInterface->PurgeZone_GetInfo(e, zoneInfo);
-			//std::cout << "Purge Zone in FOV:" << e.Location.x << ", "<< e.Location.y << "---Radius: "<< zoneInfo.Radius << std::endl;
-		}
+	//Get the steering
+	SteeringPlugin_Output steering{};
+	bool steeringFound = m_pBlackboard->GetData("SteeringOutput", steering);
+	if (!steeringFound) {
+		std::cout << "Steering was not found in the blackboard" << std::endl;
 	}
-
-	//INVENTORY USAGE DEMO
-	//********************
-
-	if (m_GrabItem)
-	{
-		ItemInfo item;
-		//Item_Grab > When DebugParams.AutoGrabClosestItem is TRUE, the Item_Grab function returns the closest item in range
-		//Keep in mind that DebugParams are only used for debugging purposes, by default this flag is FALSE
-		//Otherwise, use GetEntitiesInFOV() to retrieve a vector of all entities in the FOV (EntityInfo)
-		//Item_Grab gives you the ItemInfo back, based on the passed EntityHash (retrieved by GetEntitiesInFOV)
-		if (m_pInterface->Item_Grab({}, item))
-		{
-			//Once grabbed, you can add it to a specific inventory slot
-			//Slot must be empty
-			m_pInterface->Inventory_AddItem(m_InventorySlot, item);
-		}
-	}
-
-	if (m_UseItem)
-	{
-		//Use an item (make sure there is an item at the given inventory slot)
-		m_pInterface->Inventory_UseItem(m_InventorySlot);
-	}
-
-	if (m_RemoveItem)
-	{
-		//Remove an item from a inventory slot
-		m_pInterface->Inventory_RemoveItem(m_InventorySlot);
-	}
-
-	//Simple Seek Behaviour (towards Target)
-	steering.LinearVelocity = nextTargetPos - agentInfo.Position; //Desired Velocity
-	steering.LinearVelocity.Normalize(); //Normalize Desired Velocity
-	steering.LinearVelocity *= agentInfo.MaxLinearSpeed; //Rescale to Max Speed
-
-	if (Distance(nextTargetPos, agentInfo.Position) < 2.f)
-	{
-		steering.LinearVelocity = Elite::ZeroVector2;
-	}
-
-	//steering.AngularVelocity = m_AngSpeed; //Rotate your character to inspect the world while walking
-	steering.AutoOrient = true; //Setting AutoOrient to TRue overrides the AngularVelocity
-
-	steering.RunMode = m_CanRun; //If RunMode is True > MaxLinSpd is increased for a limited time (till your stamina runs out)
-
-	//SteeringPlugin_Output is works the exact same way a SteeringBehaviour output
-
-//@End (Demo Purposes)
-	m_GrabItem = false; //Reset State
+ 
+	//Reset State
+	m_GrabItem = false; 
 	m_UseItem = false;
 	m_RemoveItem = false;
 

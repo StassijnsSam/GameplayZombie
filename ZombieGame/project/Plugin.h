@@ -40,6 +40,9 @@ private:
 	UINT m_InventorySlot = 0;
 
 	//Added member variables
+	bool m_WasFleeing{ false };
+	bool m_IsFleeing{ false };
+
 	Blackboard* m_pBlackboard{ nullptr };
 	BehaviorTree* m_pBehaviorTree{nullptr};
 	Inventory* m_pInventory{ nullptr };

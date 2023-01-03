@@ -45,6 +45,8 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBlackboard->AddData("CurrentPurgeZone", PurgeZoneInfo{});
 
 	m_pBlackboard->AddData("CanRun", m_CanRun);
+	m_pBlackboard->AddData("WasFleeing", m_WasFleeing);
+	m_pBlackboard->AddData("IsFleeing", m_IsFleeing);
 	m_pBlackboard->AddData("Target", Elite::Vector2{0, 0});
 
 	//Create behaviorTree
@@ -57,8 +59,33 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 				new BehaviorAction(BT_Actions::GetReadyToEscapePurgeZone),
 				new BehaviorAction(BT_Actions::Flee)
 			}),
-			//Combat
-
+			new BehaviorSelector({
+				//Combat, face the closest enemy and shoot him
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::IsEnemyInFOV),
+					new BehaviorConditional(BT_Conditions::HasGun),
+					new BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
+					new BehaviorAction(BT_Actions::Face),
+					new BehaviorAction(BT_Actions::ShootTarget)
+									}),
+				//If you see an enemy and have no gun, get ready to flee
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::IsEnemyInFOV),
+					new BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
+					new BehaviorAction(BT_Actions::GetReadyToFlee),
+					new BehaviorAction(BT_Actions::Flee)
+									}),
+				new BehaviorSequence({
+					//As long as you are in the flee radius, keep fleeing
+					new BehaviorConditional(BT_Conditions::IsFleeing),
+					new BehaviorAction(BT_Actions::Flee)
+					})
+			}),
+			//When you are done fleeing, turn around to see if you are still being followed
+			new BehaviorSequence({
+				new BehaviorConditional(BT_Conditions::WasFleeing),
+				new BehaviorAction(BT_Actions::Face)
+			}),
 			//Use items needed to survive
 
 			//Explore houses
@@ -66,7 +93,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 			//Explore world
 
 			//Seek
-			new BehaviorAction(BT_Actions::Seek)
+			//new BehaviorAction(BT_Actions::Seek)
 			})
 	);
 
@@ -254,33 +281,34 @@ void Plugin::ClearData()
 	m_EnemiesInFOV.clear();
 	m_PurgeZonesInFOV.clear();
 	m_pBlackboard->ChangeData("CanRun", false);
+	//m_pBlackboard->ChangeData("WasFleeing", false);
 }
 
 void Plugin::UpdateEntitiesFOV()
 {
 	std::vector<EntityInfo> entitiesInFOV = GetEntitiesInFOV();
-
+	
 	//Update the member variables then update the value in the blackboard
 	for (const EntityInfo& entity : entitiesInFOV) {
 		if (entity.Type == eEntityType::ITEM) {
 			ItemInfo itemInfo{};
 			m_pInterface->Item_GetInfo(entity, itemInfo);
 			m_ItemsInFOV.push_back(itemInfo);
-			m_pBlackboard->ChangeData("ItemsInFOV", m_ItemsInFOV);
 		}
 		if (entity.Type == eEntityType::ENEMY) {
 			EnemyInfo enemyInfo{};
 			m_pInterface->Enemy_GetInfo(entity, enemyInfo);
 			m_EnemiesInFOV.push_back(enemyInfo);
-			m_pBlackboard->ChangeData("EnemiesInFOV", m_EnemiesInFOV);
 		}
 		if (entity.Type == eEntityType::PURGEZONE) {
 			PurgeZoneInfo purgeZoneInfo{};
 			m_pInterface->PurgeZone_GetInfo(entity, purgeZoneInfo);
 			m_PurgeZonesInFOV.push_back(purgeZoneInfo);
-			m_pBlackboard->ChangeData("PurgeZonesInFOV", m_PurgeZonesInFOV);
 		}
 	}
+	m_pBlackboard->ChangeData("ItemsInFOV", m_ItemsInFOV);
+	m_pBlackboard->ChangeData("EnemiesInFOV", m_EnemiesInFOV);
+	m_pBlackboard->ChangeData("PurgeZonesInFOV", m_PurgeZonesInFOV);
 }
 
 void Plugin::UpdateHousesFOV()

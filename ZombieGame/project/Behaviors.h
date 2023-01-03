@@ -10,6 +10,7 @@
 //-----------------------------------------------------------------
 #include "EliteMath/EMath.h"
 #include "EBehaviorTree.h"
+#include "Inventory.h"
 
 //-----------------------------------------------------------------
 // Behaviors
@@ -74,8 +75,10 @@ namespace BT_Actions
 
 		//If it is far enough from the target, let him stop
 		if (Elite::DistanceSquared(target, playerInfo.Position) > fleeRadius * fleeRadius) {
+			//Set isfleeing and wasfleeing
+			pBlackboard->ChangeData("WasFleeing", true);
+			pBlackboard->ChangeData("IsFleeing", false);
 			steering.LinearVelocity = { 0, 0 };
-			//turn around to where you ran from? so you can run further if still being chased
 		}
 		else {
 			steering.RunMode = canRun;
@@ -92,11 +95,16 @@ namespace BT_Actions
 	{
 		Elite::Vector2 target{};
 		AgentInfo playerInfo{};
+		//Get the steering so you will keep moving while facing the target
+		SteeringPlugin_Output steering{};
 
 		bool dataFound = pBlackboard->GetData("Target", target) &&
-			pBlackboard->GetData("PlayerInfo", playerInfo);
+			pBlackboard->GetData("PlayerInfo", playerInfo) &&
+			pBlackboard->GetData("SteeringOutput", steering);
 
-		SteeringPlugin_Output steering{};
+		if (dataFound == false) {
+			return BehaviorState::Failure;
+		}
 
 		const Elite::Vector2 toTarget{ target - playerInfo.Position };
 
@@ -129,6 +137,73 @@ namespace BT_Actions
 		
 		return BehaviorState::Success;
 	}
+
+	BehaviorState GetReadyToFlee(Blackboard* pBlackboard) {
+		pBlackboard->ChangeData("IsFleeing", true);
+
+		//Set sprint based on health, what type of enemy is closeby etc
+
+		return BehaviorState::Success;
+	}
+
+	BehaviorState SetClosestEnemyAsTarget(Blackboard* pBlackboard) {
+		AgentInfo playerInfo{};
+		std::vector<EnemyInfo> enemiesInFOV{};
+
+		bool dataFound = pBlackboard->GetData("EnemiesInFOV", enemiesInFOV) &&
+			pBlackboard->GetData("PlayerInfo", playerInfo);
+
+		if (dataFound == false) {
+			return BehaviorState::Failure;
+		}
+
+		//If there are no enemies in the FOV, this cant work
+		if (!(enemiesInFOV.size() > 0)) {
+			return BehaviorState::Failure;
+		}
+
+		EnemyInfo closestEnemy{ enemiesInFOV.at(0) };
+		float minDistanceSquared{Elite::DistanceSquared(playerInfo.Position, closestEnemy.Location)};
+		for (const EnemyInfo& enemy : enemiesInFOV) {
+			float distanceSquared{ Elite::DistanceSquared(playerInfo.Position, enemy.Location )};
+			if (distanceSquared < minDistanceSquared) {
+				closestEnemy = enemy;
+				minDistanceSquared = distanceSquared;
+			}
+		}
+
+		pBlackboard->ChangeData("Target", closestEnemy.Location);
+		return BehaviorState::Success;
+	}
+
+	BehaviorState ShootTarget(Blackboard* pBlackboard) {
+		Inventory* pInventory{};
+
+		bool dataFound = pBlackboard->GetData("Inventory", pInventory);
+
+		if (dataFound == false || pInventory == nullptr) {
+			return BehaviorState::Failure;
+		}
+
+		//Prefer shotgun over pistol, If you have a shotgun shoot it, else shoot the pistol
+		//	Inventory keeps track of the ammo and will throw away an empty gun automatically
+		if (pInventory->ContainsItemOfType(eItemType::SHOTGUN)) {
+			bool hasFired = pInventory->UseItemOfType(eItemType::SHOTGUN);
+			if (hasFired) {
+				return BehaviorState::Success;
+			}	
+		}
+		else {
+			if (pInventory->ContainsItemOfType(eItemType::PISTOL)) {
+				bool hasFired = pInventory->UseItemOfType(eItemType::PISTOL);
+				if (hasFired) {
+					return BehaviorState::Success;
+				}			
+			}
+		}
+		//If no guns were found somehow, and you were not able to fire them, return faillure
+		return BehaviorState::Failure;
+	}
 }
 
 namespace BT_Conditions
@@ -153,6 +228,57 @@ namespace BT_Conditions
 			}
 		}
 		return false;
+	}
+
+	bool IsEnemyInFOV(Blackboard* pBlackboard) {
+		std::vector<EnemyInfo> enemiesInFOV{};
+
+		bool dataFound = pBlackboard->GetData("EnemiesInFOV", enemiesInFOV);
+		if (dataFound == false) {
+			return false;
+		}
+
+		//If this vectors size is bigger than 0 it means there is one or more enemies in the FOV
+		return enemiesInFOV.size() > 0;
+	}
+
+	bool HasGun(Blackboard* pBlackboard) {
+		Inventory* pInventory{};
+
+		bool dataFound = pBlackboard->GetData("Inventory", pInventory);
+
+		if (dataFound == false || pInventory == nullptr) {
+			return false;
+		}
+
+		//If you have a pistol, or a shotgun, you are armed
+		bool hasGun = pInventory->ContainsItemOfType(eItemType::PISTOL) || pInventory->ContainsItemOfType(eItemType::SHOTGUN);
+
+		return hasGun;
+	}
+
+	bool WasFleeing(Blackboard* pBlackboard) {
+		bool wasFleeing{};
+
+		bool dataFound = pBlackboard->GetData("WasFleeing", wasFleeing);
+
+		if (dataFound == false) {
+			return false;
+		}
+
+		return wasFleeing;
+	}
+
+	bool IsFleeing(Blackboard* pBlackboard) {
+		bool IsFleeing{};
+
+		bool dataFound = pBlackboard->GetData("IsFleeing", IsFleeing);
+
+		if (dataFound == false) {
+			return false;
+		}
+
+		return IsFleeing;
 	}
 }
 #endif

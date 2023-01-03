@@ -207,6 +207,46 @@ namespace BT_Actions
 		//If no guns were found somehow, and you were not able to fire them, return faillure
 		return BehaviorState::Failure;
 	}
+
+	BehaviorState UseMedkit(Blackboard* pBlackboard) {
+		Inventory* pInventory{};
+
+		bool dataFound = pBlackboard->GetData("Inventory", pInventory);
+
+		if (dataFound == false || pInventory == nullptr) {
+			return BehaviorState::Failure;
+		}
+
+		//Inventory will automatically delete the medkit once it is used up
+		if (pInventory->ContainsItemOfType(eItemType::MEDKIT)) {
+			bool hasUsed = pInventory->UseItemOfType(eItemType::MEDKIT);
+			if (hasUsed) {
+				return BehaviorState::Success;
+			}
+		}
+		//If no medkit was found or you were unable to use it, return faillure
+		return BehaviorState::Failure;
+	}
+
+	BehaviorState EatFood(Blackboard* pBlackboard) {
+		Inventory* pInventory{};
+
+		bool dataFound = pBlackboard->GetData("Inventory", pInventory);
+
+		if (dataFound == false || pInventory == nullptr) {
+			return BehaviorState::Failure;
+		}
+
+		//Inventory will automatically delete the food once it is used up
+		if (pInventory->ContainsItemOfType(eItemType::FOOD)) {
+			bool hasUsed = pInventory->UseItemOfType(eItemType::FOOD);
+			if (hasUsed) {
+				return BehaviorState::Success;
+			}
+		}
+		//If no food was found or you were unable to eat it, return faillure
+		return BehaviorState::Failure;
+	}
 }
 
 namespace BT_Conditions
@@ -282,6 +322,78 @@ namespace BT_Conditions
 		}
 
 		return IsFleeing;
+	}
+
+	bool IsHurt(Blackboard* pBlackboard) {
+		AgentInfo playerInfo{};
+		float maxHealth{};
+
+		bool dataFound = pBlackboard->GetData("PlayerInfo", playerInfo) &&
+			pBlackboard->GetData("MaxPlayerHealth", maxHealth);
+
+		if (dataFound == false) {
+			return false;
+		}
+
+		//If you have less health than max health you are hurt
+		return playerInfo.Health < maxHealth;
+	}
+
+	bool ShouldHeal(Blackboard* pBlackboard) {
+		AgentInfo playerInfo{};
+		Inventory* pInventory{};
+		float minimumHealthToHeal{};
+
+		bool dataFound = pBlackboard->GetData("PlayerInfo", playerInfo) && 
+			pBlackboard->GetData("Inventory", pInventory) &&
+			pBlackboard->GetData("MinimumHealthToHeal", minimumHealthToHeal);
+
+		if (dataFound == false || pInventory == nullptr) {
+			return false;
+		}
+		//Only if you have a medkit and your health is below the minimum health to heal, you should heal
+		if (pInventory->ContainsItemOfType(eItemType::MEDKIT)) {
+			if (playerInfo.Health < minimumHealthToHeal) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool IsHungry(Blackboard* pBlackboard) {
+		AgentInfo playerInfo{};
+		float maxEnergy{};
+
+		bool dataFound = pBlackboard->GetData("PlayerInfo", playerInfo) &&
+			pBlackboard->GetData("MaxPlayerEnergy", maxEnergy);
+
+		if (dataFound == false) {
+			return false;
+		}
+
+		//If you have less energy than the max energy, you are hungry
+		return playerInfo.Energy < maxEnergy;
+	}
+
+	bool ShouldEat(Blackboard* pBlackboard) {
+		AgentInfo playerInfo{};
+		Inventory* pInventory{};
+		float minimumEnergyToEat{};
+
+		bool dataFound = pBlackboard->GetData("PlayerInfo", playerInfo) &&
+			pBlackboard->GetData("Inventory", pInventory) &&
+			pBlackboard->GetData("MinimumEnergyToEat", minimumEnergyToEat);
+
+		if (dataFound == false || pInventory == nullptr) {
+			return false;
+		}
+		//Only if you have food and you are below the minimum energy to eat, you should eat
+		if (pInventory->ContainsItemOfType(eItemType::FOOD)) {
+			if (playerInfo.Energy < minimumEnergyToEat) {
+				return true;
+			}
+		}
+		return false;
 	}
 }
 #endif

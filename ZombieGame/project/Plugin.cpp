@@ -49,6 +49,14 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBlackboard->AddData("IsFleeing", false);
 	m_pBlackboard->AddData("Target", Elite::Vector2{0, 0});
 
+	//Health
+	m_pBlackboard->AddData("MaxPlayerHealth", 10.0f);
+	m_pBlackboard->AddData("MinimumHealthToHeal", 7.0f);
+
+	//Food
+	m_pBlackboard->AddData("MaxPlayerEnergy", 10.0f);
+	m_pBlackboard->AddData("MinimumEnergyToEat", 7.0f);
+
 	//Create behaviorTree
 	m_pBehaviorTree = new BehaviorTree(m_pBlackboard,
 		//Root
@@ -87,12 +95,29 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					new BehaviorAction(BT_Actions::Face)
 					}),
 			}),
+			//Bitten by enemy
+			new BehaviorSelector({
+				new BehaviorSequence({
+
+				})
+			}),
 			//Use items needed to survive
 			new BehaviorSelector({
-				//Use food
-
 				//Use medkit
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::IsHurt),
+					new BehaviorConditional(BT_Conditions::ShouldHeal),
+					new BehaviorAction(BT_Actions::UseMedkit)
+				}),
+				//Eat food
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::IsHungry),
+					new BehaviorConditional(BT_Conditions::ShouldEat),
+					new BehaviorAction(BT_Actions::EatFood)
 				})
+				})
+			//Pickup items
+			
 
 			//Explore houses
 

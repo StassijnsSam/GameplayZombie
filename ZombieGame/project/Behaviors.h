@@ -161,7 +161,7 @@ namespace BT_Actions
 		}
 
 		//If there are no enemies in the FOV, this cant work
-		if (!(enemiesInFOV.size() > 0)) {
+		if (enemiesInFOV.size() <= 0) {
 			return BehaviorState::Failure;
 		}
 
@@ -188,17 +188,18 @@ namespace BT_Actions
 			return BehaviorState::Failure;
 		}
 
-		//Prefer shotgun over pistol, If you have a shotgun shoot it, else shoot the pistol
+		//Prefer pistol over shotgun, If you have a pistol shoot it, else shoot the shotgun
+		//	Change later on, based on how many enemies are in the FOV
 		//	Inventory keeps track of the ammo and will throw away an empty gun automatically
-		if (pInventory->ContainsItemOfType(eItemType::SHOTGUN)) {
-			bool hasFired = pInventory->UseItemOfType(eItemType::SHOTGUN);
+		if (pInventory->ContainsItemOfType(eItemType::PISTOL)) {
+			bool hasFired = pInventory->UseItemOfType(eItemType::PISTOL);
 			if (hasFired) {
 				return BehaviorState::Success;
 			}	
 		}
 		else {
-			if (pInventory->ContainsItemOfType(eItemType::PISTOL)) {
-				bool hasFired = pInventory->UseItemOfType(eItemType::PISTOL);
+			if (pInventory->ContainsItemOfType(eItemType::SHOTGUN)) {
+				bool hasFired = pInventory->UseItemOfType(eItemType::SHOTGUN);
 				if (hasFired) {
 					return BehaviorState::Success;
 				}			
@@ -251,7 +252,7 @@ namespace BT_Actions
 	BehaviorState SetTargetBehindPlayer(Blackboard* pBlackboard) {
 		AgentInfo playerInfo{};
 		Elite::Vector2 target{};
-		const float distanceFactor{ 5.0f };
+		const float distanceFactor{ 2.0f };
 
 		bool dataFound = pBlackboard->GetData("PlayerInfo", playerInfo) &&
 			pBlackboard->GetData("Target", target);
@@ -265,6 +266,66 @@ namespace BT_Actions
 
 		pBlackboard->ChangeData("Target", pointBehind);
 		return BehaviorState::Success;
+	}
+
+	BehaviorState SetClosestItemAsTarget(Blackboard* pBlackboard) {
+		AgentInfo playerInfo{};
+		std::vector<EntityInfo> itemsInFOV{};
+
+		bool dataFound = pBlackboard->GetData("ItemsInFOV", itemsInFOV) &&
+			pBlackboard->GetData("PlayerInfo", playerInfo);
+
+		if (dataFound == false) {
+			return BehaviorState::Failure;
+		}
+
+		//If there are no items in the FOV, this cant work
+		if (!(itemsInFOV.size() > 0)) {
+			return BehaviorState::Failure;
+		}
+
+		EntityInfo closestItem{ itemsInFOV.at(0) };
+		float minDistanceSquared{ Elite::DistanceSquared(playerInfo.Position, closestItem.Location) };
+		for (const EntityInfo& item : itemsInFOV) {
+			float distanceSquared{ Elite::DistanceSquared(playerInfo.Position, item.Location) };
+			if (distanceSquared < minDistanceSquared) {
+				closestItem = item;
+				minDistanceSquared = distanceSquared;
+			}
+		}
+		pBlackboard->ChangeData("ClosestItem", closestItem);
+		pBlackboard->ChangeData("Target", closestItem.Location);
+		return BehaviorState::Success;
+	}
+
+	BehaviorState PickUpClosestItem(Blackboard* pBlackboard) {
+		AgentInfo playerInfo{};
+		EntityInfo closestItem{};
+		Inventory* pInventory{};
+		IExamInterface* pInterface{};
+
+		auto dataFound = pBlackboard->GetData("PlayerInfo", playerInfo) &&
+			pBlackboard->GetData("ClosestItem", closestItem) &&
+			pBlackboard->GetData("Inventory", pInventory) && 
+			pBlackboard->GetData("Interface", pInterface);
+
+		if (dataFound == false || pInventory == nullptr || pInterface == nullptr) {
+			return BehaviorState::Failure;
+		}
+
+		//Closest item is empty
+		if (closestItem.EntityHash == 0) {
+			return BehaviorState::Failure;
+		}
+		bool hasPickedup = pInventory->PickupItem(closestItem);
+		if (hasPickedup) {
+			//Debug render the inventory (TODO: remove)
+			pInventory->DebugRender();
+			return BehaviorState::Success;
+		}
+
+		//If it was impossible to pick it up, return faillure
+		return BehaviorState::Failure;
 	}
 }
 
@@ -314,7 +375,7 @@ namespace BT_Conditions
 		}
 
 		//If you have a pistol, or a shotgun, you are armed
-		bool hasGun = pInventory->ContainsItemOfType(eItemType::PISTOL) || pInventory->ContainsItemOfType(eItemType::SHOTGUN);
+		bool hasGun = (pInventory->ContainsItemOfType(eItemType::PISTOL) || pInventory->ContainsItemOfType(eItemType::SHOTGUN));
 
 		return hasGun;
 	}
@@ -425,6 +486,81 @@ namespace BT_Conditions
 		}
 
 		return playerInfo.WasBitten;
+	}
+
+	bool IsItemInFOV(Blackboard* pBlackboard) {
+		std::vector<EntityInfo> itemsInFOV{};
+
+		bool dataFound = pBlackboard->GetData("ItemsInFOV", itemsInFOV);
+		if (dataFound == false) {
+			return false;
+		}
+
+		//If this vectors size is bigger than 0 it means there is one or more items in the FOV
+		return itemsInFOV.size() > 0;
+	}
+
+	bool IsBitten(Blackboard* pBlackboard) {
+		AgentInfo playerInfo{};
+
+		bool dataFound = pBlackboard->GetData("PlayerInfo", playerInfo);
+
+		if (dataFound == false) {
+			return false;
+		}
+
+		return playerInfo.Bitten;
+	}
+
+	bool IsItemInPickupRange(Blackboard* pBlackboard) {
+		AgentInfo playerInfo{};
+		EntityInfo itemInfo{};
+
+		bool dataFound = pBlackboard->GetData("PlayerInfo", playerInfo) &&
+			pBlackboard->GetData("ClosestItem", itemInfo);
+
+		if (dataFound == false) {
+			return false;
+		}
+
+		//if the item info is empty
+		if (itemInfo.EntityHash == 0) {
+			return false;
+		}
+
+		if (Elite::DistanceSquared(playerInfo.Position, itemInfo.Location) < playerInfo.GrabRange * playerInfo.GrabRange) {
+			return true;
+		}
+
+		return false;
+	}
+
+	bool IsFacingTarget(Blackboard* pBlackboard) {
+		AgentInfo playerInfo{};
+		Elite::Vector2 target{};
+		const float acceptanceAngle{ 0.01f };
+
+		bool dataFound = pBlackboard->GetData("PlayerInfo", playerInfo) &&
+			pBlackboard->GetData("Target", target);
+
+		if (dataFound == false) {
+			return false;
+		}
+
+		const Elite::Vector2 toTarget{ target - playerInfo.Position };
+
+		//angle between -pi and +pi
+		const float angleTo{ atan2f(toTarget.y, toTarget.x) };
+		float angleFrom{ playerInfo.Orientation };
+
+		float deltaAngle = angleTo - angleFrom;
+
+		if (abs(deltaAngle) < acceptanceAngle) {
+			return true;
+		}
+
+		return false;
+
 	}
 }
 #endif

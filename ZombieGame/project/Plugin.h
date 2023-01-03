@@ -50,7 +50,7 @@ private:
 	BehaviorTree* m_pBehaviorTree{nullptr};
 	Inventory* m_pInventory{ nullptr };
 
-	std::vector<ItemInfo> m_ItemsInFOV{};
+	std::vector<EntityInfo> m_ItemsInFOV{};
 	std::vector<EnemyInfo> m_EnemiesInFOV{};
 	std::vector<PurgeZoneInfo> m_PurgeZonesInFOV{};
 	std::vector<HouseInfo> m_HousesInFOV{};

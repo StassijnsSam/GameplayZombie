@@ -13,7 +13,7 @@ Inventory::Inventory(IExamInterface* pInterface, int maxGunAmount, int maxMedkit
 	m_MinMedkitChargeAmount{minMedkitChargeAmount},
 	m_MinFoodEnergyAmount{minFoodEnergyAmount}
 {
-	m_Items.reserve(m_Size);
+	m_Items.resize(m_Size);
 	//fill it up with Random drops, this is only internally used and will be seen as Empty
 	ItemInfo emptyItem{};
 	emptyItem.Type = eItemType::RANDOM_DROP;
@@ -188,6 +188,9 @@ bool Inventory::PickupItem(EntityInfo item)
 			return false;
 		}
 	}
+	//debug render
+
+	return false;
 }
 
 bool Inventory::UseItemOfType(eItemType itemType)
@@ -215,6 +218,14 @@ bool Inventory::UseItemOfType(eItemType itemType)
 	switch (itemInfo.Type)
 	{
 	case eItemType::PISTOL:
+		//If you used your last ammo from weapon, drop it
+		if (m_pInterface->Weapon_GetAmmo(itemInfo) <= 0) {
+			m_pInterface->Inventory_RemoveItem(index);
+			ItemInfo emptyItem{};
+			emptyItem.Type = eItemType::RANDOM_DROP;
+			m_Items.at(index) = emptyItem;
+		}
+		break;
 	case eItemType::SHOTGUN:
 		//If you used your last ammo from weapon, drop it
 		if (m_pInterface->Weapon_GetAmmo(itemInfo) <= 0) {
@@ -244,4 +255,31 @@ bool Inventory::UseItemOfType(eItemType itemType)
 		break;
 	}
 	return true;
+}
+
+void Inventory::DebugRender()
+{
+	for (const ItemInfo& item : m_Items) {
+		switch (item.Type)
+		{
+		case(eItemType::PISTOL):
+			std::cout << "Pistol" << std::endl;
+			break;
+		case(eItemType::SHOTGUN):
+			std::cout << "Shotgun" << std::endl;
+			break;
+		case(eItemType::MEDKIT):
+			std::cout << "Medkit" << std::endl;
+			break;
+		case(eItemType::FOOD):
+			std::cout << "Food" << std::endl;
+			break;
+		case(eItemType::GARBAGE):
+			std::cout << "Garbage" << std::endl;
+			break;
+		case(eItemType::RANDOM_DROP):
+			std::cout << "Empty" << std::endl;
+			break;
+		}
+	}
 }

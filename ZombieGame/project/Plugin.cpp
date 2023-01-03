@@ -39,6 +39,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBlackboard->AddData("HousesInFOV", m_HousesInFOV);
 	m_pBlackboard->AddData("EnemiesInFOV", m_EnemiesInFOV);
 	m_pBlackboard->AddData("ItemsInFOV", m_ItemsInFOV);
+	m_pBlackboard->AddData("ClosestItem", EntityInfo{});
 
 	//Purge zone
 	m_pBlackboard->AddData("PurgeZonesInFOV", m_PurgeZonesInFOV);
@@ -47,7 +48,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBlackboard->AddData("CanRun", m_CanRun);
 	m_pBlackboard->AddData("WasFleeing", false);
 	m_pBlackboard->AddData("IsFleeing", false);
-	m_pBlackboard->AddData("Target", Elite::Vector2{0, 0});
+	m_pBlackboard->AddData("Target", Elite::Vector2{0, 50});
 
 	//Health
 	m_pBlackboard->AddData("MaxPlayerHealth", 10.0f);
@@ -69,17 +70,25 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 			}),
 			//Enemy spotted
 			new BehaviorSelector({
-				//Combat, face the closest enemy and shoot him
+				//Combat, face the closest enemy and shoot him while walking away
 				new BehaviorSequence({
+					new BehaviorSequence({
 					new BehaviorConditional(BT_Conditions::IsEnemyInFOV),
 					new BehaviorConditional(BT_Conditions::HasGun),
 					new BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
-					new BehaviorAction(BT_Actions::Face),
-					new BehaviorAction(BT_Actions::ShootTarget)
+					new BehaviorAction(BT_Actions::Flee),
+					new BehaviorAction(BT_Actions::Face)
 									}),
+					new BehaviorSequence({
+						new BehaviorConditional(BT_Conditions::IsFacingTarget),
+						new BehaviorAction(BT_Actions::ShootTarget)
+					})
+				}),
 				//If you see an enemy and have no gun, get ready to flee (and later find a weapon)
 				new BehaviorSequence({
 					new BehaviorConditional(BT_Conditions::IsEnemyInFOV),
+					//If you dont have gun
+					new InvertedBehaviorConditional(BT_Conditions::HasGun),
 					new BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
 					new BehaviorAction(BT_Actions::GetReadyToFlee),
 					new BehaviorAction(BT_Actions::Flee)
@@ -97,17 +106,22 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 			}),
 			//Bitten by enemy
 			new BehaviorSelector({
-				//If you were bitten and have a gun, turn around
+				//If you just got bitten, set the target behind you
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::IsBitten),
+					new BehaviorAction(BT_Actions::SetTargetBehindPlayer)
+					}),
+				//If you were bitten and have a gun, turn around while walking away
 				new BehaviorSequence({
 					new BehaviorConditional(BT_Conditions::WasBitten),
 					new BehaviorConditional(BT_Conditions::HasGun),
-					new BehaviorAction(BT_Actions::SetTargetBehindPlayer),
+					new BehaviorAction(BT_Actions::Flee),
 					new BehaviorAction(BT_Actions::Face)
 				}),
 				//If you were bitten and have no gun, run away
 				new BehaviorSequence({
 					new BehaviorConditional(BT_Conditions::WasBitten),
-					new BehaviorAction(BT_Actions::SetTargetBehindPlayer),
+					new InvertedBehaviorConditional(BT_Conditions::HasGun),
 					new BehaviorAction(BT_Actions::GetReadyToFlee),
 					new BehaviorAction(BT_Actions::Flee)
 				})
@@ -126,16 +140,31 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					new BehaviorConditional(BT_Conditions::ShouldEat),
 					new BehaviorAction(BT_Actions::EatFood)
 				})
-				})
+			}),
 			//Pickup items
-			
+			new BehaviorSelector({
+				//if an item is not within pickup range move to it
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::IsItemInFOV),
+					new InvertedBehaviorConditional(BT_Conditions::IsItemInPickupRange),
+					new BehaviorAction(BT_Actions::SetClosestItemAsTarget),
+					new BehaviorAction(BT_Actions::Seek)
+
+				}),
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::IsItemInFOV),
+					new BehaviorConditional(BT_Conditions::IsItemInPickupRange),
+					new BehaviorAction(BT_Actions::SetClosestItemAsTarget),
+					new BehaviorAction(BT_Actions::PickUpClosestItem)
+				})
+			}),
 
 			//Explore houses
 
 			//Explore world
 
 			//Seek
-			//new BehaviorAction(BT_Actions::Seek)
+			new BehaviorAction(BT_Actions::Seek)
 			})
 	);
 
@@ -280,6 +309,11 @@ void Plugin::Render(float dt) const
 {
 	//This Render function should only contain calls to Interface->Draw_... functions
 	m_pInterface->Draw_SolidCircle(m_Target, .7f, { 0,0 }, { 1, 0, 0 });
+
+	Elite::Vector2 target{};
+	m_pBlackboard->GetData("Target", target);
+
+	m_pInterface->Draw_Point(target, 5.0f, Elite::Vector3{ 0, 1, 0 });
 }
 
 vector<HouseInfo> Plugin::GetHousesInFOV() const
@@ -338,9 +372,8 @@ void Plugin::UpdateEntitiesFOV()
 	//Update the member variables then update the value in the blackboard
 	for (const EntityInfo& entity : entitiesInFOV) {
 		if (entity.Type == eEntityType::ITEM) {
-			ItemInfo itemInfo{};
-			m_pInterface->Item_GetInfo(entity, itemInfo);
-			m_ItemsInFOV.push_back(itemInfo);
+			//Keep the items as entities so it is easier to destroy them
+			m_ItemsInFOV.push_back(entity);
 		}
 		if (entity.Type == eEntityType::ENEMY) {
 			EnemyInfo enemyInfo{};

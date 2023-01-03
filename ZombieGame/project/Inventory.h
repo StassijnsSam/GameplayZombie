@@ -25,6 +25,8 @@ public:
 	bool PickupItem(EntityInfo item);
 	bool UseItemOfType(eItemType itemType);
 
+	void DebugRender();
+
 private:
 	//Size could be a non constant in case you can pick up extra backpacks with storage space etc
 	const UINT m_Size{};

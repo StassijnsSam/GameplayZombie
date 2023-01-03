@@ -112,6 +112,19 @@ private:
 };
 
 //-----------------------------------------------------------------
+// BEHAVIOR TREE INVERTED CONDITIONAL (IBehavior)
+//-----------------------------------------------------------------
+class InvertedBehaviorConditional : public IBehavior
+{
+public:
+	explicit InvertedBehaviorConditional(std::function<bool(Blackboard*)> fp) : m_fpConditional(fp) {}
+	virtual BehaviorState Execute(Blackboard* pBlackBoard) override;
+
+private:
+	std::function<bool(Blackboard*)> m_fpConditional = nullptr;
+};
+
+//-----------------------------------------------------------------
 // BEHAVIOR TREE ACTION (IBehavior)
 //-----------------------------------------------------------------
 class BehaviorAction : public IBehavior

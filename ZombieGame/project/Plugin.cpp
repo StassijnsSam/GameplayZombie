@@ -97,8 +97,19 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 			}),
 			//Bitten by enemy
 			new BehaviorSelector({
+				//If you were bitten and have a gun, turn around
 				new BehaviorSequence({
-
+					new BehaviorConditional(BT_Conditions::WasBitten),
+					new BehaviorConditional(BT_Conditions::HasGun),
+					new BehaviorAction(BT_Actions::SetTargetBehindPlayer),
+					new BehaviorAction(BT_Actions::Face)
+				}),
+				//If you were bitten and have no gun, run away
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::WasBitten),
+					new BehaviorAction(BT_Actions::SetTargetBehindPlayer),
+					new BehaviorAction(BT_Actions::GetReadyToFlee),
+					new BehaviorAction(BT_Actions::Flee)
 				})
 			}),
 			//Use items needed to survive

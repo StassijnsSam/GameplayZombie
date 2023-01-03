@@ -247,6 +247,25 @@ namespace BT_Actions
 		//If no food was found or you were unable to eat it, return faillure
 		return BehaviorState::Failure;
 	}
+
+	BehaviorState SetTargetBehindPlayer(Blackboard* pBlackboard) {
+		AgentInfo playerInfo{};
+		Elite::Vector2 target{};
+		const float distanceFactor{ 5.0f };
+
+		bool dataFound = pBlackboard->GetData("PlayerInfo", playerInfo) &&
+			pBlackboard->GetData("Target", target);
+
+		if (dataFound == false) {
+			return BehaviorState::Failure;
+		}
+
+		Elite::Vector2 pointBehind = Elite::Vector2(playerInfo.Position.x - distanceFactor * cosf(playerInfo.Orientation),
+			playerInfo.Position.y - distanceFactor * sinf(playerInfo.Orientation));
+
+		pBlackboard->ChangeData("Target", pointBehind);
+		return BehaviorState::Success;
+	}
 }
 
 namespace BT_Conditions
@@ -394,6 +413,18 @@ namespace BT_Conditions
 			}
 		}
 		return false;
+	}
+
+	bool WasBitten(Blackboard* pBlackboard) {
+		AgentInfo playerInfo{};
+
+		bool dataFound = pBlackboard->GetData("PlayerInfo", playerInfo);
+
+		if (dataFound == false) {
+			return false;
+		}
+
+		return playerInfo.WasBitten;
 	}
 }
 #endif

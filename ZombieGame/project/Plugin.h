@@ -43,7 +43,7 @@ private:
 	float m_MaxWasFleeingTime{ 2.0f };
 	float m_WasFleeingTimer{ m_MaxWasFleeingTime };
 
-	float m_MaxRunningTime{ 1.0f };
+	float m_MaxRunningTime{ 1.3f };
 	float m_IsRunningTimer{ m_MaxRunningTime };
 
 	Blackboard* m_pBlackboard{ nullptr };

@@ -78,6 +78,7 @@ namespace BT_Actions
 			//Set isfleeing and wasfleeing
 			pBlackboard->ChangeData("WasFleeing", true);
 			pBlackboard->ChangeData("IsFleeing", false);
+			pBlackboard->ChangeData("CanRun", false);
 			steering.LinearVelocity = { 0, 0 };
 		}
 		else {
@@ -140,6 +141,8 @@ namespace BT_Actions
 
 	BehaviorState GetReadyToFlee(Blackboard* pBlackboard) {
 		pBlackboard->ChangeData("IsFleeing", true);
+		pBlackboard->ChangeData("WasFleeing", false);
+		pBlackboard->ChangeData("CanRun", true);
 
 		//Set sprint based on health, what type of enemy is closeby etc
 

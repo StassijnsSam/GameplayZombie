@@ -40,8 +40,11 @@ private:
 	UINT m_InventorySlot = 0;
 
 	//Added member variables
-	bool m_WasFleeing{ false };
-	bool m_IsFleeing{ false };
+	float m_MaxWasFleeingTime{ 2.0f };
+	float m_WasFleeingTimer{ m_MaxWasFleeingTime };
+
+	float m_MaxRunningTime{ 1.0f };
+	float m_IsRunningTimer{ m_MaxRunningTime };
 
 	Blackboard* m_pBlackboard{ nullptr };
 	BehaviorTree* m_pBehaviorTree{nullptr};
@@ -55,6 +58,8 @@ private:
 	void ClearData();
 	void UpdateEntitiesFOV();
 	void UpdateHousesFOV();
+	void UpdateWasFleeingTimer(float dt);
+	void UpdateIsRunningTimer(float dt);
 
 };
 

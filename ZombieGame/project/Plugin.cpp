@@ -45,8 +45,8 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBlackboard->AddData("CurrentPurgeZone", PurgeZoneInfo{});
 
 	m_pBlackboard->AddData("CanRun", m_CanRun);
-	m_pBlackboard->AddData("WasFleeing", m_WasFleeing);
-	m_pBlackboard->AddData("IsFleeing", m_IsFleeing);
+	m_pBlackboard->AddData("WasFleeing", false);
+	m_pBlackboard->AddData("IsFleeing", false);
 	m_pBlackboard->AddData("Target", Elite::Vector2{0, 0});
 
 	//Create behaviorTree
@@ -59,6 +59,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 				new BehaviorAction(BT_Actions::GetReadyToEscapePurgeZone),
 				new BehaviorAction(BT_Actions::Flee)
 			}),
+			//Enemy spotted
 			new BehaviorSelector({
 				//Combat, face the closest enemy and shoot him
 				new BehaviorSequence({
@@ -68,25 +69,30 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					new BehaviorAction(BT_Actions::Face),
 					new BehaviorAction(BT_Actions::ShootTarget)
 									}),
-				//If you see an enemy and have no gun, get ready to flee
+				//If you see an enemy and have no gun, get ready to flee (and later find a weapon)
 				new BehaviorSequence({
 					new BehaviorConditional(BT_Conditions::IsEnemyInFOV),
 					new BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
 					new BehaviorAction(BT_Actions::GetReadyToFlee),
 					new BehaviorAction(BT_Actions::Flee)
 									}),
+				//As long as you are in the flee radius, keep fleeing
 				new BehaviorSequence({
-					//As long as you are in the flee radius, keep fleeing
 					new BehaviorConditional(BT_Conditions::IsFleeing),
 					new BehaviorAction(BT_Actions::Flee)
-					})
-			}),
-			//When you are done fleeing, turn around to see if you are still being followed
-			new BehaviorSequence({
-				new BehaviorConditional(BT_Conditions::WasFleeing),
-				new BehaviorAction(BT_Actions::Face)
+					}),
+				//When you are done fleeing, turn around to see if you are still being followed
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::WasFleeing),
+					new BehaviorAction(BT_Actions::Face)
+					}),
 			}),
 			//Use items needed to survive
+			new BehaviorSelector({
+				//Use food
+
+				//Use medkit
+				})
 
 			//Explore houses
 
@@ -210,6 +216,10 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	//	Fill in all the entities in the FOV in their respective categories and update blackboard
 	UpdateEntitiesFOV();
 	UpdateHousesFOV();
+	//Update the fleeing timer
+	UpdateWasFleeingTimer(dt);
+	//Update the canrun timer
+	UpdateIsRunningTimer(dt);
 
 	//Update the behaviorTree (with the new data)
 	m_pBehaviorTree->Update(dt);
@@ -280,7 +290,8 @@ void Plugin::ClearData()
 	m_ItemsInFOV.clear();
 	m_EnemiesInFOV.clear();
 	m_PurgeZonesInFOV.clear();
-	m_pBlackboard->ChangeData("CanRun", false);
+	//Now done with timers
+	//m_pBlackboard->ChangeData("CanRun", false);
 	//m_pBlackboard->ChangeData("WasFleeing", false);
 }
 
@@ -318,4 +329,32 @@ void Plugin::UpdateHousesFOV()
 	//Update the member variable and update the blackboard
 	m_HousesInFOV = housesInFOV;
 	m_pBlackboard->ChangeData("HousesInFOV", m_HousesInFOV);
+}
+
+void Plugin::UpdateWasFleeingTimer(float dt)
+{
+	bool wasFleeing{};
+	m_pBlackboard->GetData("WasFleeing", wasFleeing);
+
+	if (wasFleeing) {
+		m_WasFleeingTimer -= dt;
+		if (m_WasFleeingTimer <= 0) {
+			m_pBlackboard->ChangeData("WasFleeing", false);
+			m_WasFleeingTimer = m_MaxWasFleeingTime;
+		}
+	}
+}
+
+void Plugin::UpdateIsRunningTimer(float dt)
+{
+	bool canRun{};
+	m_pBlackboard->GetData("CanRun", canRun);
+
+	if (canRun) {
+		m_IsRunningTimer -= dt;
+		if (m_IsRunningTimer <= 0) {
+			m_pBlackboard->ChangeData("CanRun", false);
+			m_IsRunningTimer = m_MaxRunningTime;
+		}
+	}
 }

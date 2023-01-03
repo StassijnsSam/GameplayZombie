@@ -88,7 +88,32 @@ namespace BT_Actions
 		return BehaviorState::Success;
 	}
 
-	BehaviorState EscapePurgeZone(Blackboard* pBlackboard) {
+	BehaviorState Face(Blackboard* pBlackboard)
+	{
+		Elite::Vector2 target{};
+		AgentInfo playerInfo{};
+
+		bool dataFound = pBlackboard->GetData("Target", target) &&
+			pBlackboard->GetData("PlayerInfo", playerInfo);
+
+		SteeringPlugin_Output steering{};
+
+		const Elite::Vector2 toTarget{ target - playerInfo.Position };
+
+		//angle between -pi and +pi
+		const float angleTo{ atan2f(toTarget.y, toTarget.x) };
+		float angleFrom{ playerInfo.Orientation };
+
+		float deltaAngle = angleTo - angleFrom;
+
+		steering.AutoOrient = false;
+		steering.AngularVelocity = deltaAngle * playerInfo.MaxAngularSpeed;
+		
+		pBlackboard->ChangeData("SteeringOutput", steering);
+		return BehaviorState::Success;
+	}
+
+	BehaviorState GetReadyToEscapePurgeZone(Blackboard* pBlackboard) {
 		AgentInfo playerInfo{};
 		PurgeZoneInfo currentPurgeZone{};
 

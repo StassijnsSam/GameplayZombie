@@ -54,10 +54,16 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 			//Run from purge zone
 			new BehaviorSequence({
 				new BehaviorConditional(BT_Conditions::IsInPurgeZone),
-				new BehaviorAction(BT_Actions::EscapePurgeZone),
+				new BehaviorAction(BT_Actions::GetReadyToEscapePurgeZone),
 				new BehaviorAction(BT_Actions::Flee)
 			}),
+			//Combat
+
 			//Use items needed to survive
+
+			//Explore houses
+
+			//Explore world
 
 			//Seek
 			new BehaviorAction(BT_Actions::Seek)
@@ -168,14 +174,15 @@ void Plugin::Update(float dt)
 SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 {
 	//Clear all the data
-	m_HousesInFOV.clear();
-	m_ItemsInFOV.clear();
-	m_EnemiesInFOV.clear();
-	m_pBlackboard->ChangeData("CanRun", false);
+	ClearData();
 
 	//Fill in the new data
+	//	Fill in the agent info and update blackboard
 	AgentInfo agentInfo = m_pInterface->Agent_GetInfo();
 	m_pBlackboard->ChangeData("PlayerInfo", agentInfo);
+	//	Fill in all the entities in the FOV in their respective categories and update blackboard
+	UpdateEntitiesFOV();
+	UpdateHousesFOV();
 
 	//Update the behaviorTree (with the new data)
 	m_pBehaviorTree->Update(dt);
@@ -188,7 +195,7 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	}
  
 	//Reset State
-	m_GrabItem = false; 
+	m_GrabItem = false;
 	m_UseItem = false;
 	m_RemoveItem = false;
 
@@ -238,4 +245,49 @@ vector<EntityInfo> Plugin::GetEntitiesInFOV() const
 	}
 
 	return vEntitiesInFOV;
+}
+
+void Plugin::ClearData()
+{
+	m_HousesInFOV.clear();
+	m_ItemsInFOV.clear();
+	m_EnemiesInFOV.clear();
+	m_PurgeZonesInFOV.clear();
+	m_pBlackboard->ChangeData("CanRun", false);
+}
+
+void Plugin::UpdateEntitiesFOV()
+{
+	std::vector<EntityInfo> entitiesInFOV = GetEntitiesInFOV();
+
+	//Update the member variables then update the value in the blackboard
+	for (const EntityInfo& entity : entitiesInFOV) {
+		if (entity.Type == eEntityType::ITEM) {
+			ItemInfo itemInfo{};
+			m_pInterface->Item_GetInfo(entity, itemInfo);
+			m_ItemsInFOV.push_back(itemInfo);
+			m_pBlackboard->ChangeData("ItemsInFOV", m_ItemsInFOV);
+		}
+		if (entity.Type == eEntityType::ENEMY) {
+			EnemyInfo enemyInfo{};
+			m_pInterface->Enemy_GetInfo(entity, enemyInfo);
+			m_EnemiesInFOV.push_back(enemyInfo);
+			m_pBlackboard->ChangeData("EnemiesInFOV", m_EnemiesInFOV);
+		}
+		if (entity.Type == eEntityType::PURGEZONE) {
+			PurgeZoneInfo purgeZoneInfo{};
+			m_pInterface->PurgeZone_GetInfo(entity, purgeZoneInfo);
+			m_PurgeZonesInFOV.push_back(purgeZoneInfo);
+			m_pBlackboard->ChangeData("PurgeZonesInFOV", m_PurgeZonesInFOV);
+		}
+	}
+}
+
+void Plugin::UpdateHousesFOV()
+{
+	std::vector<HouseInfo> housesInFOV = GetHousesInFOV();
+
+	//Update the member variable and update the blackboard
+	m_HousesInFOV = housesInFOV;
+	m_pBlackboard->ChangeData("HousesInFOV", m_HousesInFOV);
 }

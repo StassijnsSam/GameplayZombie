@@ -327,6 +327,35 @@ namespace BT_Actions
 		//If it was impossible to pick it up, return faillure
 		return BehaviorState::Failure;
 	}
+
+	BehaviorState SetClosestHouseAsTarget(Blackboard* pBlackboard) {
+		std::vector<HouseInfo> housesInFOV{};
+		AgentInfo PlayerInfo{};
+
+		bool dataFound = pBlackboard->GetData("HousesInFOV", housesInFOV) &&
+			pBlackboard->GetData("PlayerInfo", PlayerInfo);
+
+		if (dataFound == false) {
+			return BehaviorState::Failure;
+		}
+
+		if (housesInFOV.size() <= 0) {
+			return BehaviorState::Failure;
+		}
+
+		HouseInfo closestHouse{ housesInFOV.at(0) };
+		float closestDistanceSquared{ Elite::DistanceSquared(PlayerInfo.Position, closestHouse.Center) };
+		for (const HouseInfo& house : housesInFOV) {
+			float distanceSquared = Elite::DistanceSquared(PlayerInfo.Position, house.Center);
+			if (distanceSquared < closestDistanceSquared) {
+				closestHouse = house;
+				closestDistanceSquared = distanceSquared;
+			}
+		}
+
+		pBlackboard->ChangeData("Target", closestHouse.Center);
+		return BehaviorState::Success;
+	}
 }
 
 namespace BT_Conditions
@@ -561,6 +590,18 @@ namespace BT_Conditions
 
 		return false;
 
+	}
+
+	bool IsHouseInFov(Blackboard* pBlackboard) {
+		std::vector<HouseInfo> housesInFOV{};
+
+		bool dataFound = pBlackboard->GetData("HousesInFOV", housesInFOV);
+
+		if (dataFound == false) {
+			return false;
+		}
+
+		return housesInFOV.size() > 0;
 	}
 }
 #endif

@@ -1,6 +1,7 @@
 #pragma once
 #include "IExamPlugin.h"
 #include "Exam_HelperStructs.h"
+#include "Structs.h"
 
 class IBaseInterface;
 class IExamInterface;
@@ -54,6 +55,8 @@ private:
 	std::vector<EnemyInfo> m_EnemiesInFOV{};
 	std::vector<PurgeZoneInfo> m_PurgeZonesInFOV{};
 	std::vector<HouseInfo> m_HousesInFOV{};
+
+	std::vector<HouseSearch> m_KnownHouses{};
 
 	void ClearData();
 	void UpdateEntitiesFOV();

@@ -35,8 +35,6 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBlackboard->AddData("SteeringOutput", SteeringPlugin_Output{});
 	m_pBlackboard->AddData("Inventory", m_pInventory);
 
-	//FOV
-	m_pBlackboard->AddData("HousesInFOV", m_HousesInFOV);
 	m_pBlackboard->AddData("EnemiesInFOV", m_EnemiesInFOV);
 	m_pBlackboard->AddData("ItemsInFOV", m_ItemsInFOV);
 	m_pBlackboard->AddData("ClosestItem", EntityInfo{});
@@ -48,7 +46,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBlackboard->AddData("CanRun", m_CanRun);
 	m_pBlackboard->AddData("WasFleeing", false);
 	m_pBlackboard->AddData("IsFleeing", false);
-	m_pBlackboard->AddData("Target", Elite::Vector2{0, 50});
+	m_pBlackboard->AddData("Target", Elite::Vector2{0, 0});
 
 	//Health
 	m_pBlackboard->AddData("MaxPlayerHealth", 10.0f);
@@ -57,6 +55,10 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	//Food
 	m_pBlackboard->AddData("MaxPlayerEnergy", 10.0f);
 	m_pBlackboard->AddData("MinimumEnergyToEat", 7.0f);
+
+	//Houses
+	m_pBlackboard->AddData("HousesInFOV", m_HousesInFOV);
+	m_pBlackboard->AddData("KnownHouses", m_KnownHouses);
 
 	//Create behaviorTree
 	m_pBehaviorTree = new BehaviorTree(m_pBlackboard,
@@ -78,7 +80,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					new BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
 					new BehaviorAction(BT_Actions::Flee),
 					new BehaviorAction(BT_Actions::Face)
-									}),
+					}),
 					new BehaviorSequence({
 						new BehaviorConditional(BT_Conditions::IsFacingTarget),
 						new BehaviorAction(BT_Actions::ShootTarget)
@@ -160,7 +162,13 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 			}),
 
 			//Explore houses
-
+			new BehaviorSelector({
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::IsHouseInFov),
+					new BehaviorAction(BT_Actions::SetClosestHouseAsTarget),
+					new BehaviorAction(BT_Actions::Seek)
+				})
+			}),
 			//Explore world
 
 			//Seek
@@ -394,10 +402,24 @@ void Plugin::UpdateEntitiesFOV()
 void Plugin::UpdateHousesFOV()
 {
 	std::vector<HouseInfo> housesInFOV = GetHousesInFOV();
-
 	//Update the member variable and update the blackboard
 	m_HousesInFOV = housesInFOV;
 	m_pBlackboard->ChangeData("HousesInFOV", m_HousesInFOV);
+
+	bool isNewHouse{ true };
+	//If it is a new house add it to the known houses
+	for (const HouseInfo& house : housesInFOV) {
+		for (const HouseSearch& houseSearch : m_KnownHouses) {
+			//If the centers are very close together, it means it is the same house
+			if (Elite::DistanceSquared(house.Center, houseSearch.Center) < houseSearch.acceptanceRadius * houseSearch.acceptanceRadius) {
+				isNewHouse = false;
+			}
+		}
+		//If you checked all the known houses and it is still true, it is a new house
+		if (isNewHouse) {
+			m_KnownHouses.push_back(HouseSearch(house));
+		}
+	}
 }
 
 void Plugin::UpdateWasFleeingTimer(float dt)

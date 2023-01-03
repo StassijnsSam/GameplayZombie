@@ -189,6 +189,7 @@
     <ClInclude Include="Inventory.h" />
     <ClInclude Include="Plugin.h" />
     <ClInclude Include="stdafx.h" />
+    <ClInclude Include="Structs.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="EBehaviorTree.cpp" />

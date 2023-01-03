@@ -14,5 +14,6 @@
     <ClInclude Include="EBehaviorTree.h" />
     <ClInclude Include="EBlackboard.h" />
     <ClInclude Include="Inventory.h" />
+    <ClInclude Include="Structs.h" />
   </ItemGroup>
 </Project>

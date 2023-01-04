@@ -58,8 +58,8 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 
 	//Houses
 	m_pBlackboard->AddData("HousesInFOV", m_HousesInFOV);
-	m_pBlackboard->AddData("KnownHouses", m_KnownHouses);
-	m_pBlackboard->AddData("CurrentHouse", HouseSearch{});
+	m_pBlackboard->AddData("KnownHouses", &m_KnownHouses);
+	m_pBlackboard->AddData("CurrentHouse", &HouseSearch{});
 	m_pBlackboard->AddData("ClosestHouse", HouseInfo{});
 
 	//Create behaviorTree
@@ -159,12 +159,8 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 				//If you are currently inside of a house, and should explore it, search all locations
 				new BehaviorSequence({
 					new BehaviorConditional(BT_Conditions::IsInsideHouse),
-					new BehaviorConditional(BT_Conditions::ShouldSearchHouse)
-				}),
-				//If you are currently inside of a house, should no longer explore it, leave
-				new BehaviorSequence({
-					new BehaviorConditional(BT_Conditions::IsInsideHouse),
-					new InvertedBehaviorConditional(BT_Conditions::ShouldSearchHouse)
+					new BehaviorConditional(BT_Conditions::ShouldSearchHouse),
+					new BehaviorAction(BT_Actions::SearchHouse)
 				}),
 				//If you see a house and you should explore it, go inside the house
 				new BehaviorSequence({
@@ -187,7 +183,8 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					new BehaviorConditional(BT_Conditions::WasFleeing),
 					new BehaviorAction(BT_Actions::Face)
 					})
-			})
+			}),
+			new BehaviorAction(BT_Actions::Seek)
 		})
 	);
 
@@ -433,10 +430,9 @@ void Plugin::UpdateHousesFOV()
 		//If you checked all the known houses and it is still true, it is a new house
 		if (isNewHouse) {
 			m_KnownHouses.push_back(HouseSearch(house));
+			//Data in Blackboard is automatically changed since it is a pointer
 		}
 	}
-	//Change known houses data in blackboard
-	m_pBlackboard->ChangeData("KnownHouses", m_KnownHouses);
 }
 
 void Plugin::UpdateWasFleeingTimer(float dt)

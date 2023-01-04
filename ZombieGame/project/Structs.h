@@ -9,6 +9,8 @@ struct HouseSearch : public HouseInfo {
 	{
 		this->Center = house.Center;
 		this->Size = house.Size;
+		minWidthBetweenSearchLocations = int(this->Size.x - 2 * wallThickness) / 4;
+		minHeightBetweenSearchLocations = int(this->Size.y - 2 * wallThickness) / 4;
 		GenerateSearchLocations();
 	}
 	HouseSearch() {
@@ -25,15 +27,15 @@ struct HouseSearch : public HouseInfo {
 		return *this;
 	}
 
-	float wallThickness{ 5.0f };
+	float wallThickness{ 3.0f };
 
 	bool shouldCheck{ true };
 
 	float timeSinceLooted{};
 	const float minTimeBeforeRecheck{100.f};
 
-	int minWidthBetweenSearchLocations{10};
-	int minHeightBetweenSearchLocations{10};
+	int minWidthBetweenSearchLocations{};
+	int minHeightBetweenSearchLocations{};
 
 	const float acceptanceRadius{3.0f};
 
@@ -50,19 +52,17 @@ struct HouseSearch : public HouseInfo {
 
 	void GenerateSearchLocations() {
 		Elite::Vector2 bottomLeft{Center.x - Size.x/2.f + wallThickness, Center.y - Size.y/2.f + wallThickness};
+		Elite::Vector2 bottomRight{ Center.x + Size.x / 2.f - wallThickness, Center.y - Size.y / 2.f + wallThickness };
+		Elite::Vector2 topLeft{ Center.x - Size.x / 2.f + wallThickness, Center.y + Size.y / 2.f - wallThickness };
+		Elite::Vector2 topRight{ Center.x + Size.x / 2.f - wallThickness, Center.y + Size.y / 2.f - wallThickness };
 
-		Elite::Vector2 currentSearchLocation{ bottomLeft };
-		searchLocations.push_back(currentSearchLocation);
-
-		int rowAmount = int(Size.y - 2 * wallThickness) / minWidthBetweenSearchLocations;
-		int colAmount = int(Size.x - 2 * wallThickness) / minHeightBetweenSearchLocations;
-
-		for (int rowIndex{}; rowIndex < rowAmount; ++rowIndex) {
-			for (int colIndex{}; colIndex < colAmount; ++colIndex) {
-				currentSearchLocation = Elite::Vector2{bottomLeft.x + rowIndex * minWidthBetweenSearchLocations, bottomLeft.y + colIndex * minHeightBetweenSearchLocations};
-				searchLocations.push_back(currentSearchLocation);
-			}
-		}
+		//Use the corners and the center to fully search the house
+		searchLocations.push_back(bottomLeft);
+		searchLocations.push_back(Center);
+		searchLocations.push_back(topLeft);
+		searchLocations.push_back(topRight);
+		searchLocations.push_back(Center);
+		searchLocations.push_back(bottomRight);
 	}
 
 	std::vector<Elite::Vector2> GetSearchLocations() {
@@ -77,20 +77,20 @@ struct HouseSearch : public HouseInfo {
 		return Elite::Vector2{ 0, 0 };
 	}
 
-	bool IsPointInsideHouse(Elite::Vector2 point) {
-		bool insideX = point.x > (Center.x - Size.x / 2.f + wallThickness) && point.x < (Center.x + Size.x / 2.f + wallThickness);
-		bool insideY = point.y > (Center.y - Size.y / 2.f + wallThickness) && point.y < (Center.y + Size.y / 2.f + wallThickness);
+	bool IsPointInsideHouse(Elite::Vector2 point) const{
+		bool insideX = point.x > (Center.x - (Size.x / 2.f)) && point.x < (Center.x + (Size.x / 2.f));
+		bool insideY = point.y > (Center.y - (Size.y / 2.f) ) && point.y < (Center.y + (Size.y / 2.f));
 
 		return insideX && insideY;
 	}
 
-	bool CheckedCurrentLocation(Elite::Vector2 playerLocation) {
+	bool UpdateCurrentLocation(Elite::Vector2 playerLocation) {
 		Elite::Vector2 currentLocation = GetCurrentLocation();
 
 		if (Elite::DistanceSquared(playerLocation, currentLocation) < acceptanceRadius * acceptanceRadius) {
 			if (currentLocationIndex < searchLocations.size() - 1) {
 				//Set the index to the next location
-				++currentLocationIndex;
+				currentLocationIndex += 1;
 				return true;
 			}
 			else {

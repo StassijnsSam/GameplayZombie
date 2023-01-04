@@ -327,6 +327,25 @@ namespace BT_Actions
 		//If it was impossible to pick it up, return faillure
 		return BehaviorState::Failure;
 	}
+
+	BehaviorState SearchHouse(Blackboard* pBlackboard) {
+		HouseSearch* pCurrentHouse{};
+		AgentInfo playerInfo{};
+
+		bool dataFound = pBlackboard->GetData("CurrentHouse", pCurrentHouse) &&
+			pBlackboard->GetData("PlayerInfo", playerInfo);
+
+		if (dataFound == false || pCurrentHouse == nullptr) {
+			return BehaviorState::Failure;
+		}
+
+		//Check if you are close to the current location, and then update it to the next one
+		bool hasChecked = pCurrentHouse->UpdateCurrentLocation(playerInfo.Position);
+		pBlackboard->ChangeData("Target", pCurrentHouse->GetCurrentLocation());
+
+		//Go towards the new spot
+		return Seek(pBlackboard);
+	}
 }
 
 namespace BT_Conditions
@@ -576,63 +595,56 @@ namespace BT_Conditions
 	}
 
 	bool IsInsideHouse(Blackboard* pBlackboard) {
-		std::vector<HouseSearch> knownHouses{};
+		std::vector<HouseSearch>* pKnownHouses{};
 		AgentInfo playerInfo{};
 
-		bool dataFound = pBlackboard->GetData("KnownHouses", knownHouses) &&
+		bool dataFound = pBlackboard->GetData("KnownHouses", pKnownHouses) &&
 			pBlackboard->GetData("PlayerInfo", playerInfo);
 
-		if (dataFound == false) {
+		if (dataFound == false || pKnownHouses == nullptr) {
 			return false;
 		}
-
-		//If there are no known houses yet you cant be inside of one
-		if (knownHouses.size() <= 0) {
-			return false;
-		}
-
-		for (const HouseSearch& houseSearch : knownHouses) {
-			if (Elite::DistanceSquared(playerInfo.Position, houseSearch.Center) < houseSearch.acceptanceRadius * houseSearch.acceptanceRadius) {
+		
+		//Check if you are insideof the house
+		for (HouseSearch& houseSearch : *pKnownHouses) {
+			if (houseSearch.IsPointInsideHouse(playerInfo.Position)) {
 				//Set the current house as the house you are in
-				pBlackboard->ChangeData("CurrentHouse", houseSearch);
+				pBlackboard->ChangeData("CurrentHouse", &houseSearch);
 				return true;
 			}
 		}
+
 		//You are not inside a known house
 		return false;
 	}
 
 	bool ShouldSearchHouse(Blackboard* pBlackboard) {
-		HouseSearch currentHouse{};
+		HouseSearch* pCurrentHouse{};
 
-		bool dataFound = pBlackboard->GetData("CurrentHouse", currentHouse);
+		bool dataFound = pBlackboard->GetData("CurrentHouse", pCurrentHouse);
 
-		if (dataFound == false) {
+		if (dataFound == false || pCurrentHouse == nullptr) {
 			return false;
 		}
 
 		//This will be true if the house was not fully searched, or if it has been some time since it has been searched
-		return currentHouse.shouldCheck;
+		return pCurrentHouse->shouldCheck;
 	}
 
 	bool ShouldEnterClosestHouse(Blackboard* pBlackboard) {
 		std::vector<HouseInfo> housesInFOV{};
 		AgentInfo PlayerInfo{};
-		std::vector<HouseSearch> knownHouses{};
+		std::vector<HouseSearch>* pKnownHouses{};
 
 		bool dataFound = pBlackboard->GetData("HousesInFOV", housesInFOV) &&
 			pBlackboard->GetData("PlayerInfo", PlayerInfo) &&
-			pBlackboard->GetData("KnownHouses", knownHouses);
+			pBlackboard->GetData("KnownHouses", pKnownHouses);
 
-		if (dataFound == false) {
+		if (dataFound == false || pKnownHouses == nullptr) {
 			return false;
 		}
 
 		if (housesInFOV.size() <= 0) {
-			return false;
-		}
-
-		if (knownHouses.size() <= 0) {
 			return false;
 		}
 
@@ -651,7 +663,7 @@ namespace BT_Conditions
 		//See if it is a known house
 		HouseSearch knownHouse{};
 		for (const HouseInfo& house : housesInFOV) {
-			for (const HouseSearch& houseSearch : knownHouses) {
+			for (const HouseSearch& houseSearch : *pKnownHouses) {
 				//If the centers are very close together, it means it is the same house
 				if (Elite::DistanceSquared(house.Center, houseSearch.Center) < houseSearch.acceptanceRadius * houseSearch.acceptanceRadius) {
 					knownHouse = houseSearch;

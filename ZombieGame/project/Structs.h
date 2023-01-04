@@ -11,10 +11,23 @@ struct HouseSearch : public HouseInfo {
 		this->Size = house.Size;
 		GenerateSearchLocations();
 	}
+	HouseSearch() {
+		this->Center = Elite::Vector2{ 0, 0 };
+		this->Size = Elite::Vector2{ 0, 0 };
+	}
+
+	HouseSearch operator=(const HouseSearch& houseSearch) {
+		this->Center = houseSearch.Center;
+		this->Size = houseSearch.Size;
+		this->shouldCheck = houseSearch.shouldCheck;
+		this->currentLocationIndex = houseSearch.currentLocationIndex;
+		this->searchLocations = houseSearch.searchLocations;
+		return *this;
+	}
+
 	float wallThickness{ 5.0f };
 
 	bool shouldCheck{ true };
-	bool fullySearched{ false };
 
 	float timeSinceLooted{};
 	const float minTimeBeforeRecheck{100.f};
@@ -24,7 +37,7 @@ struct HouseSearch : public HouseInfo {
 
 	const float acceptanceRadius{3.0f};
 
-	int currentLocationIndex{ 0 };
+	UINT currentLocationIndex{ 0 };
 
 	std::vector<Elite::Vector2> searchLocations{};
 
@@ -32,7 +45,6 @@ struct HouseSearch : public HouseInfo {
 		timeSinceLooted += dt;
 		if (timeSinceLooted > minTimeBeforeRecheck) {
 			shouldCheck = true;
-			fullySearched = false;
 		}
 	}
 
@@ -61,6 +73,8 @@ struct HouseSearch : public HouseInfo {
 		if (currentLocationIndex < searchLocations.size()) {
 			return searchLocations.at(currentLocationIndex);
 		}
+		//Invalid location
+		return Elite::Vector2{ 0, 0 };
 	}
 
 	bool IsPointInsideHouse(Elite::Vector2 point) {
@@ -80,7 +94,7 @@ struct HouseSearch : public HouseInfo {
 				return true;
 			}
 			else {
-				fullySearched = true;
+				shouldCheck = false;
 				//Set the current location index back to 0 for when you come back to recheck it
 				currentLocationIndex = 0;
 				return true;

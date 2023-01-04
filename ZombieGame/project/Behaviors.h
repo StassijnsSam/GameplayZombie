@@ -327,35 +327,6 @@ namespace BT_Actions
 		//If it was impossible to pick it up, return faillure
 		return BehaviorState::Failure;
 	}
-
-	BehaviorState SetClosestHouseAsTarget(Blackboard* pBlackboard) {
-		std::vector<HouseInfo> housesInFOV{};
-		AgentInfo PlayerInfo{};
-
-		bool dataFound = pBlackboard->GetData("HousesInFOV", housesInFOV) &&
-			pBlackboard->GetData("PlayerInfo", PlayerInfo);
-
-		if (dataFound == false) {
-			return BehaviorState::Failure;
-		}
-
-		if (housesInFOV.size() <= 0) {
-			return BehaviorState::Failure;
-		}
-
-		HouseInfo closestHouse{ housesInFOV.at(0) };
-		float closestDistanceSquared{ Elite::DistanceSquared(PlayerInfo.Position, closestHouse.Center) };
-		for (const HouseInfo& house : housesInFOV) {
-			float distanceSquared = Elite::DistanceSquared(PlayerInfo.Position, house.Center);
-			if (distanceSquared < closestDistanceSquared) {
-				closestHouse = house;
-				closestDistanceSquared = distanceSquared;
-			}
-		}
-
-		pBlackboard->ChangeData("Target", closestHouse.Center);
-		return BehaviorState::Success;
-	}
 }
 
 namespace BT_Conditions
@@ -602,6 +573,101 @@ namespace BT_Conditions
 		}
 
 		return housesInFOV.size() > 0;
+	}
+
+	bool IsInsideHouse(Blackboard* pBlackboard) {
+		std::vector<HouseSearch> knownHouses{};
+		AgentInfo playerInfo{};
+
+		bool dataFound = pBlackboard->GetData("KnownHouses", knownHouses) &&
+			pBlackboard->GetData("PlayerInfo", playerInfo);
+
+		if (dataFound == false) {
+			return false;
+		}
+
+		//If there are no known houses yet you cant be inside of one
+		if (knownHouses.size() <= 0) {
+			return false;
+		}
+
+		for (const HouseSearch& houseSearch : knownHouses) {
+			if (Elite::DistanceSquared(playerInfo.Position, houseSearch.Center) < houseSearch.acceptanceRadius * houseSearch.acceptanceRadius) {
+				//Set the current house as the house you are in
+				pBlackboard->ChangeData("CurrentHouse", houseSearch);
+				return true;
+			}
+		}
+		//You are not inside a known house
+		return false;
+	}
+
+	bool ShouldSearchHouse(Blackboard* pBlackboard) {
+		HouseSearch currentHouse{};
+
+		bool dataFound = pBlackboard->GetData("CurrentHouse", currentHouse);
+
+		if (dataFound == false) {
+			return false;
+		}
+
+		//This will be true if the house was not fully searched, or if it has been some time since it has been searched
+		return currentHouse.shouldCheck;
+	}
+
+	bool ShouldEnterClosestHouse(Blackboard* pBlackboard) {
+		std::vector<HouseInfo> housesInFOV{};
+		AgentInfo PlayerInfo{};
+		std::vector<HouseSearch> knownHouses{};
+
+		bool dataFound = pBlackboard->GetData("HousesInFOV", housesInFOV) &&
+			pBlackboard->GetData("PlayerInfo", PlayerInfo) &&
+			pBlackboard->GetData("KnownHouses", knownHouses);
+
+		if (dataFound == false) {
+			return false;
+		}
+
+		if (housesInFOV.size() <= 0) {
+			return false;
+		}
+
+		if (knownHouses.size() <= 0) {
+			return false;
+		}
+
+		HouseInfo closestHouse{ housesInFOV.at(0) };
+		float closestDistanceSquared{ Elite::DistanceSquared(PlayerInfo.Position, closestHouse.Center) };
+		for (const HouseInfo& house : housesInFOV) {
+			float distanceSquared = Elite::DistanceSquared(PlayerInfo.Position, house.Center);
+			if (distanceSquared < closestDistanceSquared) {
+				closestHouse = house;
+				closestDistanceSquared = distanceSquared;
+			}
+		}
+
+		pBlackboard->ChangeData("ClosestHouse", closestHouse);
+		
+		//See if it is a known house
+		HouseSearch knownHouse{};
+		for (const HouseInfo& house : housesInFOV) {
+			for (const HouseSearch& houseSearch : knownHouses) {
+				//If the centers are very close together, it means it is the same house
+				if (Elite::DistanceSquared(house.Center, houseSearch.Center) < houseSearch.acceptanceRadius * houseSearch.acceptanceRadius) {
+					knownHouse = houseSearch;
+				}
+			}
+		}
+
+		//Invalid house or house not found
+		if (knownHouse.Center == Elite::Vector2{ 0, 0 }) {
+			return false;
+		}
+
+		//If you should check the house (not fully looted, or been a while since last check)
+		//	Set the current target to the house search location
+		pBlackboard->ChangeData("Target", knownHouse.GetCurrentLocation());
+		return knownHouse.shouldCheck;
 	}
 }
 #endif

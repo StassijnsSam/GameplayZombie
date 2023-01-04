@@ -59,6 +59,8 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	//Houses
 	m_pBlackboard->AddData("HousesInFOV", m_HousesInFOV);
 	m_pBlackboard->AddData("KnownHouses", m_KnownHouses);
+	m_pBlackboard->AddData("CurrentHouse", HouseSearch{});
+	m_pBlackboard->AddData("ClosestHouse", HouseInfo{});
 
 	//Create behaviorTree
 	m_pBehaviorTree = new BehaviorTree(m_pBlackboard,
@@ -94,17 +96,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					new BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
 					new BehaviorAction(BT_Actions::GetReadyToFlee),
 					new BehaviorAction(BT_Actions::Flee)
-									}),
-				//As long as you are in the flee radius, keep fleeing
-				new BehaviorSequence({
-					new BehaviorConditional(BT_Conditions::IsFleeing),
-					new BehaviorAction(BT_Actions::Flee)
-					}),
-				//When you are done fleeing, turn around to see if you are still being followed
-				new BehaviorSequence({
-					new BehaviorConditional(BT_Conditions::WasFleeing),
-					new BehaviorAction(BT_Actions::Face)
-					}),
+				})
 			}),
 			//Bitten by enemy
 			new BehaviorSelector({
@@ -145,7 +137,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 			}),
 			//Pickup items
 			new BehaviorSelector({
-				//if an item is not within pickup range move to it
+				//If an item is not within pickup range move to it
 				new BehaviorSequence({
 					new BehaviorConditional(BT_Conditions::IsItemInFOV),
 					new InvertedBehaviorConditional(BT_Conditions::IsItemInPickupRange),
@@ -153,6 +145,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					new BehaviorAction(BT_Actions::Seek)
 
 				}),
+				//If an item is within pickup range try to pick it up
 				new BehaviorSequence({
 					new BehaviorConditional(BT_Conditions::IsItemInFOV),
 					new BehaviorConditional(BT_Conditions::IsItemInPickupRange),
@@ -163,17 +156,39 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 
 			//Explore houses
 			new BehaviorSelector({
+				//If you are currently inside of a house, and should explore it, search all locations
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::IsInsideHouse),
+					new BehaviorConditional(BT_Conditions::ShouldSearchHouse)
+				}),
+				//If you are currently inside of a house, should no longer explore it, leave
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::IsInsideHouse),
+					new InvertedBehaviorConditional(BT_Conditions::ShouldSearchHouse)
+				}),
+				//If you see a house and you should explore it, go inside the house
 				new BehaviorSequence({
 					new BehaviorConditional(BT_Conditions::IsHouseInFov),
-					new BehaviorAction(BT_Actions::SetClosestHouseAsTarget),
+					new BehaviorConditional(BT_Conditions::ShouldEnterClosestHouse),
 					new BehaviorAction(BT_Actions::Seek)
 				})
 			}),
 			//Explore world
 
-			//Seek
-			new BehaviorAction(BT_Actions::Seek)
+			//Continue running
+			new BehaviorSelector({
+				//If still within flee radius, continue fleeing
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::IsFleeing),
+					new BehaviorAction(BT_Actions::Flee)
+					}),
+				//When you are done fleeing, turn around to see if you are still being followed
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::WasFleeing),
+					new BehaviorAction(BT_Actions::Face)
+					})
 			})
+		})
 	);
 
 }
@@ -420,6 +435,8 @@ void Plugin::UpdateHousesFOV()
 			m_KnownHouses.push_back(HouseSearch(house));
 		}
 	}
+	//Change known houses data in blackboard
+	m_pBlackboard->ChangeData("KnownHouses", m_KnownHouses);
 }
 
 void Plugin::UpdateWasFleeingTimer(float dt)

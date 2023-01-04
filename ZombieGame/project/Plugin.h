@@ -44,8 +44,14 @@ private:
 	float m_MaxWasFleeingTime{ 2.0f };
 	float m_WasFleeingTimer{ m_MaxWasFleeingTime };
 
+	float m_MaxIsFleeingTime{ 2.0f };
+	float m_IsFleeingTimer{ m_MaxIsFleeingTime };
+
 	float m_MaxRunningTime{ 1.3f };
 	float m_IsRunningTimer{ m_MaxRunningTime };
+
+	float m_MaxDangerTime{ 2.f };
+	float m_IsInDangerTimer{ m_MaxDangerTime };
 
 	Blackboard* m_pBlackboard{ nullptr };
 	BehaviorTree* m_pBehaviorTree{nullptr};
@@ -57,13 +63,16 @@ private:
 	std::vector<HouseInfo> m_HousesInFOV{};
 
 	std::vector<HouseSearch> m_KnownHouses{};
+	WorldSearch* m_pWorldSearch{};
 
 	void ClearData();
 	void UpdateEntitiesFOV();
 	void UpdateHousesFOV();
+	void UpdateKnownHouses(float dt);
 	void UpdateWasFleeingTimer(float dt);
+	void UpdateIsFleeingTimer(float dt);
 	void UpdateIsRunningTimer(float dt);
-
+	void UpdateIsInDangerTimer(float dt);
 };
 
 //ENTRY

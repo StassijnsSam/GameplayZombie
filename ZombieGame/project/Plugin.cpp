@@ -27,6 +27,8 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pInventory = new Inventory(m_pInterface, 2, 2, 1, 2, 2, 2);
 	//Create blackboard
 	m_pBlackboard = new Blackboard();
+	//Make the worldSearch
+	m_pWorldSearch = new WorldSearch(m_pInterface->World_GetInfo());
 	//Add blackboard data
 
 	m_pBlackboard->AddData("Interface", m_pInterface);
@@ -51,6 +53,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	//Health
 	m_pBlackboard->AddData("MaxPlayerHealth", 10.0f);
 	m_pBlackboard->AddData("MinimumHealthToHeal", 7.0f);
+	m_pBlackboard->AddData("IsInDanger", false);
 
 	//Food
 	m_pBlackboard->AddData("MaxPlayerEnergy", 10.0f);
@@ -61,6 +64,9 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBlackboard->AddData("KnownHouses", &m_KnownHouses);
 	m_pBlackboard->AddData("CurrentHouse", &HouseSearch{});
 	m_pBlackboard->AddData("ClosestHouse", HouseInfo{});
+	
+	//World
+	m_pBlackboard->AddData("WorldSearch", m_pWorldSearch);
 
 	//Create behaviorTree
 	m_pBehaviorTree = new BehaviorTree(m_pBlackboard,
@@ -91,12 +97,10 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 				//If you see an enemy and have no gun, get ready to flee (and later find a weapon)
 				new BehaviorSequence({
 					new BehaviorConditional(BT_Conditions::IsEnemyInFOV),
-					//If you dont have gun
 					new InvertedBehaviorConditional(BT_Conditions::HasGun),
 					new BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
-					new BehaviorAction(BT_Actions::GetReadyToFlee),
 					new BehaviorAction(BT_Actions::Flee)
-				})
+				}),
 			}),
 			//Bitten by enemy
 			new BehaviorSelector({
@@ -109,6 +113,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 				new BehaviorSequence({
 					new BehaviorConditional(BT_Conditions::WasBitten),
 					new BehaviorConditional(BT_Conditions::HasGun),
+					new BehaviorAction(BT_Actions::GetReadyToFlee),
 					new BehaviorAction(BT_Actions::Flee),
 					new BehaviorAction(BT_Actions::Face)
 				}),
@@ -137,21 +142,19 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 			}),
 			//Pickup items
 			new BehaviorSelector({
-				//If an item is not within pickup range move to it
-				new BehaviorSequence({
-					new BehaviorConditional(BT_Conditions::IsItemInFOV),
-					new InvertedBehaviorConditional(BT_Conditions::IsItemInPickupRange),
-					new BehaviorAction(BT_Actions::SetClosestItemAsTarget),
-					new BehaviorAction(BT_Actions::Seek)
-
-				}),
 				//If an item is within pickup range try to pick it up
 				new BehaviorSequence({
 					new BehaviorConditional(BT_Conditions::IsItemInFOV),
 					new BehaviorConditional(BT_Conditions::IsItemInPickupRange),
 					new BehaviorAction(BT_Actions::SetClosestItemAsTarget),
 					new BehaviorAction(BT_Actions::PickUpClosestItem)
-				})
+				}),
+				//If an item is not within pickup range move to it
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::IsItemInFOV),
+					new BehaviorAction(BT_Actions::SetClosestItemAsTarget),
+					new BehaviorAction(BT_Actions::Seek)
+				}),
 			}),
 
 			//Explore houses
@@ -169,9 +172,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					new BehaviorAction(BT_Actions::Seek)
 				})
 			}),
-			//Explore world
-
-			//Continue running
+			//Look behind you if you were fleeing
 			new BehaviorSelector({
 				//If still within flee radius, continue fleeing
 				new BehaviorSequence({
@@ -184,7 +185,10 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					new BehaviorAction(BT_Actions::Face)
 					})
 			}),
-			new BehaviorAction(BT_Actions::Seek)
+			//Explore world
+			new BehaviorAction(BT_Actions::ExploreWorld),
+
+			//Any fallback behavior (go to current target)
 		})
 	);
 
@@ -293,6 +297,10 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 {
 	//Clear all the data
 	ClearData();
+	//Reset State
+	m_GrabItem = false;
+	m_UseItem = false;
+	m_RemoveItem = false;
 
 	//Fill in the new data
 	//	Fill in the agent info and update blackboard
@@ -301,10 +309,15 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	//	Fill in all the entities in the FOV in their respective categories and update blackboard
 	UpdateEntitiesFOV();
 	UpdateHousesFOV();
+	//Update the timer on known houses so you will loot them again after some time
+	UpdateKnownHouses(dt);
 	//Update the fleeing timer
 	UpdateWasFleeingTimer(dt);
+	UpdateIsFleeingTimer(dt);
 	//Update the canrun timer
 	UpdateIsRunningTimer(dt);
+	//Update danger timer
+	UpdateIsInDangerTimer(dt);
 
 	//Update the behaviorTree (with the new data)
 	m_pBehaviorTree->Update(dt);
@@ -316,11 +329,6 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 		std::cout << "Steering was not found in the blackboard" << std::endl;
 	}
  
-	//Reset State
-	m_GrabItem = false;
-	m_UseItem = false;
-	m_RemoveItem = false;
-
 	return steering;
 }
 
@@ -435,6 +443,13 @@ void Plugin::UpdateHousesFOV()
 	}
 }
 
+void Plugin::UpdateKnownHouses(float dt)
+{
+	for (HouseSearch& houseSearch : m_KnownHouses) {
+		houseSearch.UpdateTimeSinceLooted(dt);
+	}
+}
+
 void Plugin::UpdateWasFleeingTimer(float dt)
 {
 	bool wasFleeing{};
@@ -449,6 +464,20 @@ void Plugin::UpdateWasFleeingTimer(float dt)
 	}
 }
 
+void Plugin::UpdateIsFleeingTimer(float dt)
+{
+	bool isFleeing{};
+	m_pBlackboard->GetData("IsFleeing", isFleeing);
+
+	if (isFleeing) {
+		m_IsFleeingTimer -= dt;
+		if (m_IsFleeingTimer <= 0) {
+			m_pBlackboard->ChangeData("IsFleeing", false);
+			m_IsFleeingTimer = m_MaxIsFleeingTime;
+		}
+	}
+}
+
 void Plugin::UpdateIsRunningTimer(float dt)
 {
 	bool canRun{};
@@ -459,6 +488,20 @@ void Plugin::UpdateIsRunningTimer(float dt)
 		if (m_IsRunningTimer <= 0) {
 			m_pBlackboard->ChangeData("CanRun", false);
 			m_IsRunningTimer = m_MaxRunningTime;
+		}
+	}
+}
+
+void Plugin::UpdateIsInDangerTimer(float dt)
+{
+	bool isInDanger{};
+	m_pBlackboard->GetData("IsInDanger", isInDanger);
+
+	if (isInDanger) {
+		m_IsInDangerTimer -= dt;
+		if (m_IsInDangerTimer <= 0) {
+			m_pBlackboard->ChangeData("IsInDanger", false);
+			m_IsInDangerTimer = m_MaxDangerTime;
 		}
 	}
 }

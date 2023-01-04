@@ -24,7 +24,7 @@ namespace BT_Actions
 		SteeringPlugin_Output steering{};
 		bool canRun{};
 
-		float acceptanceRadius{ 2.0f };
+		float acceptanceRadius{ 0.1f };
 
 		bool dataFound = pBlackboard->GetData("Target", target) &&
 			pBlackboard->GetData("PlayerInfo", playerInfo) &&
@@ -346,6 +346,25 @@ namespace BT_Actions
 		//Go towards the new spot
 		return Seek(pBlackboard);
 	}
+
+	BehaviorState ExploreWorld(Blackboard* pBlackboard) {
+		WorldSearch* pWorldSearch{};
+		AgentInfo playerInfo{};
+
+		bool dataFound = pBlackboard->GetData("WorldSearch", pWorldSearch) &&
+			pBlackboard->GetData("PlayerInfo", playerInfo);
+
+		if (dataFound == false || pWorldSearch == nullptr) {
+			return BehaviorState::Failure;
+		}
+
+		//Check if you are close to the current location, and then update it to the next one
+		bool hasChecked = pWorldSearch->UpdateCurrentLocation(playerInfo.Position);
+		pBlackboard->ChangeData("Target", pWorldSearch->GetCurrentLocation());
+
+		//Go towards the new spot
+		return Seek(pBlackboard);
+	}
 }
 
 namespace BT_Conditions
@@ -496,15 +515,15 @@ namespace BT_Conditions
 	}
 
 	bool WasBitten(Blackboard* pBlackboard) {
-		AgentInfo playerInfo{};
+		bool isInDanger{};
 
-		bool dataFound = pBlackboard->GetData("PlayerInfo", playerInfo);
+		bool dataFound = pBlackboard->GetData("IsInDanger", isInDanger);
 
 		if (dataFound == false) {
 			return false;
 		}
 
-		return playerInfo.WasBitten;
+		return isInDanger;
 	}
 
 	bool IsItemInFOV(Blackboard* pBlackboard) {
@@ -528,6 +547,11 @@ namespace BT_Conditions
 			return false;
 		}
 
+		//Set that you are in danger once bitten
+		if (playerInfo.Bitten) {
+			pBlackboard->ChangeData("IsInDanger", true);
+		}
+		
 		return playerInfo.Bitten;
 	}
 
@@ -604,7 +628,7 @@ namespace BT_Conditions
 		if (dataFound == false || pKnownHouses == nullptr) {
 			return false;
 		}
-		
+	
 		//Check if you are insideof the house
 		for (HouseSearch& houseSearch : *pKnownHouses) {
 			if (houseSearch.IsPointInsideHouse(playerInfo.Position)) {
@@ -613,7 +637,6 @@ namespace BT_Conditions
 				return true;
 			}
 		}
-
 		//You are not inside a known house
 		return false;
 	}
@@ -644,10 +667,6 @@ namespace BT_Conditions
 			return false;
 		}
 
-		if (housesInFOV.size() <= 0) {
-			return false;
-		}
-
 		HouseInfo closestHouse{ housesInFOV.at(0) };
 		float closestDistanceSquared{ Elite::DistanceSquared(PlayerInfo.Position, closestHouse.Center) };
 		for (const HouseInfo& house : housesInFOV) {
@@ -663,7 +682,7 @@ namespace BT_Conditions
 		//See if it is a known house
 		HouseSearch knownHouse{};
 		for (const HouseInfo& house : housesInFOV) {
-			for (const HouseSearch& houseSearch : *pKnownHouses) {
+			for (HouseSearch& houseSearch : *pKnownHouses) {
 				//If the centers are very close together, it means it is the same house
 				if (Elite::DistanceSquared(house.Center, houseSearch.Center) < houseSearch.acceptanceRadius * houseSearch.acceptanceRadius) {
 					knownHouse = houseSearch;
@@ -679,6 +698,7 @@ namespace BT_Conditions
 		//If you should check the house (not fully looted, or been a while since last check)
 		//	Set the current target to the house search location
 		pBlackboard->ChangeData("Target", knownHouse.GetCurrentLocation());
+		pBlackboard->ChangeData("CurrentHouse", &knownHouse);
 		return knownHouse.shouldCheck;
 	}
 }

@@ -27,12 +27,12 @@ struct HouseSearch : public HouseInfo {
 		return *this;
 	}
 
-	float wallThickness{ 3.0f };
+	float wallThickness{ 4.0f };
 
 	bool shouldCheck{ true };
 
 	float timeSinceLooted{};
-	const float minTimeBeforeRecheck{100.f};
+	const float minTimeBeforeRecheck{1000.f};
 
 	int minWidthBetweenSearchLocations{};
 	int minHeightBetweenSearchLocations{};
@@ -47,22 +47,22 @@ struct HouseSearch : public HouseInfo {
 		timeSinceLooted += dt;
 		if (timeSinceLooted > minTimeBeforeRecheck) {
 			shouldCheck = true;
+			timeSinceLooted = 0;
 		}
 	}
 
 	void GenerateSearchLocations() {
-		Elite::Vector2 bottomLeft{Center.x - Size.x/2.f + wallThickness, Center.y - Size.y/2.f + wallThickness};
-		Elite::Vector2 bottomRight{ Center.x + Size.x / 2.f - wallThickness, Center.y - Size.y / 2.f + wallThickness };
-		Elite::Vector2 topLeft{ Center.x - Size.x / 2.f + wallThickness, Center.y + Size.y / 2.f - wallThickness };
-		Elite::Vector2 topRight{ Center.x + Size.x / 2.f - wallThickness, Center.y + Size.y / 2.f - wallThickness };
+		Elite::Vector2 bottomLeftCenter{Center.x - Size.x/3.f + wallThickness, Center.y - Size.y/3.f + wallThickness};
+		Elite::Vector2 bottomRightCenter{ Center.x + Size.x / 3.f - wallThickness, Center.y - Size.y / 3.f + wallThickness };
+		Elite::Vector2 topLeftCenter{ Center.x - Size.x / 3.f + wallThickness, Center.y + Size.y / 3.f - wallThickness };
+		Elite::Vector2 topRightCenter{ Center.x + Size.x / 3.f - wallThickness, Center.y + Size.y / 3.f - wallThickness };
 
 		//Use the corners and the center to fully search the house
-		searchLocations.push_back(bottomLeft);
+		searchLocations.push_back(bottomLeftCenter);
+		searchLocations.push_back(topLeftCenter);
+		searchLocations.push_back(topRightCenter);
+		searchLocations.push_back(bottomRightCenter);
 		searchLocations.push_back(Center);
-		searchLocations.push_back(topLeft);
-		searchLocations.push_back(topRight);
-		searchLocations.push_back(Center);
-		searchLocations.push_back(bottomRight);
 	}
 
 	std::vector<Elite::Vector2> GetSearchLocations() {
@@ -103,4 +103,78 @@ struct HouseSearch : public HouseInfo {
 		return false;
 	}
 
+};
+
+struct WorldSearch : public WorldInfo {
+	WorldSearch(const WorldInfo& world)
+	{
+		this->Center = world.Center;
+		this->Dimensions = world.Dimensions;
+		minWidthBetweenSearchLocations = int(world.Dimensions.x/2.f) / 10;
+		minHeightBetweenSearchLocations = int(world.Dimensions.y/2.f) / 10;
+		GenerateSearchLocations();
+	}
+	WorldSearch() {
+		this->Center = Elite::Vector2{ 0, 0 };
+		this->Dimensions = Elite::Vector2{ 0, 0 };
+	}
+
+	int minWidthBetweenSearchLocations{};
+	int minHeightBetweenSearchLocations{};
+
+	const float acceptanceRadius{ 3.0f };
+	//6 because this means you will not get anywhere close to the border
+	const int squareAmount{ 6 };
+
+	UINT currentLocationIndex{ 0 };
+
+	std::vector<Elite::Vector2> searchLocations{};
+
+	void GenerateSearchLocations() {
+		//Most of the houses and the loot are at the middle of the map, so you never really want to get to the borders
+		// You start from the center and do a square search, with bigger and bigger squares
+		searchLocations.push_back(Center);
+		for (int index{1}; index < squareAmount; ++index) {
+			//Coordinates of the square
+			Elite::Vector2 bottomLeft{ Center.x - index * minWidthBetweenSearchLocations, Center.y - index * minHeightBetweenSearchLocations};
+			Elite::Vector2 bottomRight{ Center.x + index * minWidthBetweenSearchLocations, Center.y - index * minHeightBetweenSearchLocations };
+			Elite::Vector2 topLeft{ Center.x - index * minWidthBetweenSearchLocations, Center.y + index * minHeightBetweenSearchLocations };
+			Elite::Vector2 topRight{ Center.x + index * minWidthBetweenSearchLocations, Center.y + index * minHeightBetweenSearchLocations };
+			
+			searchLocations.push_back(bottomLeft);
+			searchLocations.push_back(topLeft);
+			searchLocations.push_back(topRight);
+			searchLocations.push_back(bottomRight);
+		}
+	}
+
+	std::vector<Elite::Vector2> GetSearchLocations() {
+		return searchLocations;
+	}
+
+	Elite::Vector2 GetCurrentLocation() {
+		if (currentLocationIndex < searchLocations.size()) {
+			return searchLocations.at(currentLocationIndex);
+		}
+		//Invalid location
+		return Elite::Vector2{ 0, 0 };
+	}
+
+	bool UpdateCurrentLocation(Elite::Vector2 playerLocation) {
+		Elite::Vector2 currentLocation = GetCurrentLocation();
+
+		if (Elite::DistanceSquared(playerLocation, currentLocation) < acceptanceRadius * acceptanceRadius) {
+			if (currentLocationIndex < searchLocations.size() - 1) {
+				//Set the index to the next location
+				currentLocationIndex += 1;
+				return true;
+			}
+			else {
+				//Set the current location index back to 0 so you return to the center
+				currentLocationIndex = 0;
+				return true;
+			}
+		}
+		return false;
+	}
 };

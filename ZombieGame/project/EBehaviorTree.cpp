@@ -108,12 +108,12 @@ BehaviorState BehaviorConditional::Execute(Blackboard* pBlackBoard)
 	case true:
 		m_CurrentState = BehaviorState::Success;
 		return m_CurrentState;
-	default:
 	case false:
 		m_CurrentState = m_CurrentState = BehaviorState::Failure;
 		return m_CurrentState;
 	}
 
+	return BehaviorState::Failure;
 }
 //-----------------------------------------------------------------
 // BEHAVIOR TREE ACTION (IBehavior)
@@ -140,10 +140,10 @@ BehaviorState InvertedBehaviorConditional::Execute(Blackboard* pBlackBoard)
 	case true:
 		m_CurrentState = BehaviorState::Failure;
 		return m_CurrentState;
-	default:
 	case false:
 		m_CurrentState = m_CurrentState = BehaviorState::Success;
 		return m_CurrentState;
 	}
 
+	return BehaviorState::Success;
 }

@@ -60,7 +60,7 @@ namespace BT_Actions
 		SteeringPlugin_Output steering{};
 		bool canRun{};
 
-		float fleeRadius{ 50.f };
+		float fleeRadius{ 65.f };
 
 		bool dataFound = pBlackboard->GetData("Target", target) &&
 			pBlackboard->GetData("PlayerInfo", playerInfo) &&
@@ -372,6 +372,7 @@ namespace BT_Conditions
 	bool IsInPurgeZone(Blackboard* pBlackboard) {
 		std::vector<PurgeZoneInfo> purgeZonesInFOV{};
 		AgentInfo playerInfo{};
+		const float bufferZoneSquared{ 25.0f};
 		
 		bool dataFound = pBlackboard->GetData("PurgeZonesInFOV", purgeZonesInFOV)&&
 			pBlackboard->GetData("PlayerInfo", playerInfo);
@@ -382,8 +383,8 @@ namespace BT_Conditions
 		}
 
 		for (const PurgeZoneInfo& purgeZone : purgeZonesInFOV) {
-			if (Elite::DistanceSquared(purgeZone.Center, playerInfo.Position) < purgeZone.Radius * purgeZone.Radius) {
-				//You are inside a purge zone right now
+			if (Elite::DistanceSquared(purgeZone.Center, playerInfo.Position) < (purgeZone.Radius * purgeZone.Radius + bufferZoneSquared)) {
+				//You are inside or close to a purge zone right now
 				pBlackboard->ChangeData("CurrentPurgeZone", purgeZone);
 				return true;
 			}
@@ -414,7 +415,6 @@ namespace BT_Conditions
 
 		//If you have a pistol, or a shotgun, you are armed
 		bool hasGun = (pInventory->ContainsItemOfType(eItemType::PISTOL) || pInventory->ContainsItemOfType(eItemType::SHOTGUN));
-
 		return hasGun;
 	}
 
@@ -581,7 +581,7 @@ namespace BT_Conditions
 	bool IsFacingTarget(Blackboard* pBlackboard) {
 		AgentInfo playerInfo{};
 		Elite::Vector2 target{};
-		const float acceptanceAngle{ 0.01f };
+		const float acceptanceAngle{ 0.08f };
 
 		bool dataFound = pBlackboard->GetData("PlayerInfo", playerInfo) &&
 			pBlackboard->GetData("Target", target);
@@ -604,18 +604,6 @@ namespace BT_Conditions
 
 		return false;
 
-	}
-
-	bool IsHouseInFov(Blackboard* pBlackboard) {
-		std::vector<HouseInfo> housesInFOV{};
-
-		bool dataFound = pBlackboard->GetData("HousesInFOV", housesInFOV);
-
-		if (dataFound == false) {
-			return false;
-		}
-
-		return housesInFOV.size() > 0;
 	}
 
 	bool IsInsideHouse(Blackboard* pBlackboard) {
@@ -654,52 +642,24 @@ namespace BT_Conditions
 		return pCurrentHouse->shouldCheck;
 	}
 
-	bool ShouldEnterClosestHouse(Blackboard* pBlackboard) {
-		std::vector<HouseInfo> housesInFOV{};
-		AgentInfo PlayerInfo{};
+	bool ShouldSearchKnownHouse(Blackboard* pBlackboard) {
 		std::vector<HouseSearch>* pKnownHouses{};
 
-		bool dataFound = pBlackboard->GetData("HousesInFOV", housesInFOV) &&
-			pBlackboard->GetData("PlayerInfo", PlayerInfo) &&
-			pBlackboard->GetData("KnownHouses", pKnownHouses);
+		bool dataFound = pBlackboard->GetData("KnownHouses", pKnownHouses);
 
 		if (dataFound == false || pKnownHouses == nullptr) {
 			return false;
 		}
 
-		HouseInfo closestHouse{ housesInFOV.at(0) };
-		float closestDistanceSquared{ Elite::DistanceSquared(PlayerInfo.Position, closestHouse.Center) };
-		for (const HouseInfo& house : housesInFOV) {
-			float distanceSquared = Elite::DistanceSquared(PlayerInfo.Position, house.Center);
-			if (distanceSquared < closestDistanceSquared) {
-				closestHouse = house;
-				closestDistanceSquared = distanceSquared;
+		//If any of the houses you know should be looted, check them out
+		for (HouseSearch& houseSearch : *pKnownHouses) {
+			if (houseSearch.shouldCheck) {
+				pBlackboard->ChangeData("CurrentHouse", &houseSearch);
+				return true;
 			}
 		}
 
-		pBlackboard->ChangeData("ClosestHouse", closestHouse);
-		
-		//See if it is a known house
-		HouseSearch knownHouse{};
-		for (const HouseInfo& house : housesInFOV) {
-			for (HouseSearch& houseSearch : *pKnownHouses) {
-				//If the centers are very close together, it means it is the same house
-				if (Elite::DistanceSquared(house.Center, houseSearch.Center) < houseSearch.acceptanceRadius * houseSearch.acceptanceRadius) {
-					knownHouse = houseSearch;
-				}
-			}
-		}
-
-		//Invalid house or house not found
-		if (knownHouse.Center == Elite::Vector2{ 0, 0 }) {
-			return false;
-		}
-
-		//If you should check the house (not fully looted, or been a while since last check)
-		//	Set the current target to the house search location
-		pBlackboard->ChangeData("Target", knownHouse.GetCurrentLocation());
-		pBlackboard->ChangeData("CurrentHouse", &knownHouse);
-		return knownHouse.shouldCheck;
+		return false;
 	}
 }
 #endif

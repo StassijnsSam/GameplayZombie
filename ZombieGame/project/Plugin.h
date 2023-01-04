@@ -50,7 +50,7 @@ private:
 	float m_MaxRunningTime{ 1.3f };
 	float m_IsRunningTimer{ m_MaxRunningTime };
 
-	float m_MaxDangerTime{ 2.f };
+	float m_MaxDangerTime{ 3.f };
 	float m_IsInDangerTimer{ m_MaxDangerTime };
 
 	Blackboard* m_pBlackboard{ nullptr };

@@ -86,7 +86,6 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					new BehaviorConditional(BT_Conditions::IsEnemyInFOV),
 					new BehaviorConditional(BT_Conditions::HasGun),
 					new BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
-					new BehaviorAction(BT_Actions::Flee),
 					new BehaviorAction(BT_Actions::Face)
 					}),
 					new BehaviorSequence({
@@ -99,14 +98,16 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					new BehaviorConditional(BT_Conditions::IsEnemyInFOV),
 					new InvertedBehaviorConditional(BT_Conditions::HasGun),
 					new BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
+					new BehaviorAction(BT_Actions::GetReadyToFlee),
 					new BehaviorAction(BT_Actions::Flee)
 				}),
 			}),
 			//Bitten by enemy
 			new BehaviorSelector({
-				//If you just got bitten, set the target behind you
+				//If you just got bitten and no enemy is in the FOV, set the target behind you
 				new BehaviorSequence({
 					new BehaviorConditional(BT_Conditions::IsBitten),
+					new InvertedBehaviorConditional(BT_Conditions::IsEnemyInFOV),
 					new BehaviorAction(BT_Actions::SetTargetBehindPlayer)
 					}),
 				//If you were bitten and have a gun, turn around while walking away
@@ -140,6 +141,19 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					new BehaviorAction(BT_Actions::EatFood)
 				})
 			}),
+			//Look behind you if you were fleeing
+			new BehaviorSelector({
+				//If still within flee radius, continue fleeing
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::IsFleeing),
+					new BehaviorAction(BT_Actions::Flee)
+					}),
+				//When you are done fleeing, turn around to see if you are still being followed
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::WasFleeing),
+					new BehaviorAction(BT_Actions::Face)
+					})
+			}),
 			//Pickup items
 			new BehaviorSelector({
 				//If an item is within pickup range try to pick it up
@@ -165,25 +179,11 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					new BehaviorConditional(BT_Conditions::ShouldSearchHouse),
 					new BehaviorAction(BT_Actions::SearchHouse)
 				}),
-				//If you see a house and you should explore it, go inside the house
+				//If any of the houses you already know should be looted, loot that
 				new BehaviorSequence({
-					new BehaviorConditional(BT_Conditions::IsHouseInFov),
-					new BehaviorConditional(BT_Conditions::ShouldEnterClosestHouse),
-					new BehaviorAction(BT_Actions::Seek)
+					new BehaviorConditional(BT_Conditions::ShouldSearchKnownHouse),
+					new BehaviorAction(BT_Actions::SearchHouse)
 				})
-			}),
-			//Look behind you if you were fleeing
-			new BehaviorSelector({
-				//If still within flee radius, continue fleeing
-				new BehaviorSequence({
-					new BehaviorConditional(BT_Conditions::IsFleeing),
-					new BehaviorAction(BT_Actions::Flee)
-					}),
-				//When you are done fleeing, turn around to see if you are still being followed
-				new BehaviorSequence({
-					new BehaviorConditional(BT_Conditions::WasFleeing),
-					new BehaviorAction(BT_Actions::Face)
-					})
 			}),
 			//Explore world
 			new BehaviorAction(BT_Actions::ExploreWorld),

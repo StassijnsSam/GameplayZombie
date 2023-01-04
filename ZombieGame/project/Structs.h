@@ -32,7 +32,7 @@ struct HouseSearch : public HouseInfo {
 	bool shouldCheck{ true };
 
 	float timeSinceLooted{};
-	const float minTimeBeforeRecheck{1000.f};
+	const float minTimeBeforeRecheck{500.f};
 
 	int minWidthBetweenSearchLocations{};
 	int minHeightBetweenSearchLocations{};
@@ -124,7 +124,7 @@ struct WorldSearch : public WorldInfo {
 
 	const float acceptanceRadius{ 3.0f };
 	//6 because this means you will not get anywhere close to the border
-	const int squareAmount{ 6 };
+	const int squareAmount{ 4 };
 
 	UINT currentLocationIndex{ 0 };
 
@@ -145,6 +145,10 @@ struct WorldSearch : public WorldInfo {
 			searchLocations.push_back(topLeft);
 			searchLocations.push_back(topRight);
 			searchLocations.push_back(bottomRight);
+
+			//Make the search locations further out
+			minWidthBetweenSearchLocations += int(Dimensions.x / 2.f) / 20;
+			minHeightBetweenSearchLocations += int(Dimensions.y / 2.f) / 20;
 		}
 	}
 

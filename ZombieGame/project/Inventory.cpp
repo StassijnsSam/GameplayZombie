@@ -122,7 +122,6 @@ bool Inventory::ContainsItemOfType(eItemType itemType) const
 	}
 
 	return true;
-
 	//Alternative implementation with GetAmountOfType == 0
 }
 

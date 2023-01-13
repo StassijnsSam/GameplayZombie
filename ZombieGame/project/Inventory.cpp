@@ -159,7 +159,19 @@ bool Inventory::ShouldPickupItem(EntityInfo item) {
 
 		//Check if you dont already have too many items of this type
 		if (HasTooManyOfType(itemInfo.Type)) {
-			return false;
+			//Check if any of them are almost empty
+			UINT almostEmptyItemIndex = GetAlmostEmptyItemOfType(itemInfo.Type);
+			if (almostEmptyItemIndex != invalid_index) {
+				//Get rid of the item at that current index
+				ItemInfo emptyItem{};
+				emptyItem.Type = eItemType::RANDOM_DROP;
+				m_pInterface->Inventory_RemoveItem(almostEmptyItemIndex);
+				m_Items[almostEmptyItemIndex] = emptyItem;
+				return true;
+			}
+			else {
+				return false;
+			}
 		}
 
 		return true;

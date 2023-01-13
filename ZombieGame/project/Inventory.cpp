@@ -109,6 +109,19 @@ UINT Inventory::GetAlmostEmptyItemOfType(eItemType itemType)
 	return invalid_index;
 }
 
+UINT Inventory::GetIndexOfItemOfType(eItemType itemType)
+{
+	if (!(ContainsItemOfType(itemType))) {
+		return invalid_index;
+	}
+	//Iterator for item
+	auto itemIterator = std::find_if(m_Items.begin(), m_Items.end(), [itemType](ItemInfo item) {
+		return item.Type == itemType;
+		});
+
+	return std::distance(m_Items.begin(), itemIterator);
+}
+
 bool Inventory::ContainsItemOfType(eItemType itemType) const
 {
 	//Iterator for item
@@ -132,6 +145,46 @@ bool Inventory::IsFull() const
 	return freeSlotIndex == invalid_index;
 }
 
+bool Inventory::ShouldPickupItem(EntityInfo item) {
+	//Check if the item is an actual item
+	if (item.Type != eEntityType::ITEM) {
+		return false;
+	}
+
+	ItemInfo itemInfo{};
+	m_pInterface->Item_GetInfo(item, itemInfo);
+
+	//First check if your current inventory is full
+	if (!IsFull()) {
+
+		//Check if you dont already have too many items of this type
+		if (HasTooManyOfType(itemInfo.Type)) {
+			return false;
+		}
+
+		return true;
+	}
+	//decide if this item is worth being picked up, over an item already in there
+	else {
+		UINT almostEmptyItemIndex = GetAlmostEmptyItemOfType(itemInfo.Type);
+		if (almostEmptyItemIndex != invalid_index) {
+			//Get rid of the item at that current index
+			ItemInfo emptyItem{};
+			emptyItem.Type = eItemType::RANDOM_DROP;
+			m_pInterface->Inventory_RemoveItem(almostEmptyItemIndex);
+			m_Items[almostEmptyItemIndex] = emptyItem;
+			//Pick up the new item and add it to both inventories
+			//See if you can grab the item
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+
+	return false;
+}
+
 bool Inventory::PickupItem(EntityInfo item)
 {
 	//Check if the item is an actual item
@@ -148,48 +201,17 @@ bool Inventory::PickupItem(EntityInfo item)
 		return true;
 	}
 
-	//First check if your current inventory is full
-	if (!IsFull()) {
-
-		//Check if you dont already have too many items of this type
-		if (HasTooManyOfType(itemInfo.Type)) {
-			return false;
-		}
-
-		//See if you can grab the item
-		if (!m_pInterface->Item_Grab(item, itemInfo)) {
-			return false;
-		}
-
-		//Get the first free slot and add the item to both inventories
-		UINT slotIndex = GetFreeSlot();
-		m_pInterface->Inventory_AddItem(slotIndex, itemInfo);
-		m_Items[slotIndex] = itemInfo;
-		return true;
+	//See if you can grab the item
+	if (!m_pInterface->Item_Grab(item, itemInfo)) {
+		return false;
 	}
-	//decide if this item is worth being picked up, over an item already in there
-	else {
-		UINT almostEmptyItemIndex = GetAlmostEmptyItemOfType(itemInfo.Type);
-		if (almostEmptyItemIndex != invalid_index) {
-			//Get rid of the item at that current index
-			m_pInterface->Inventory_RemoveItem(almostEmptyItemIndex);
-			//Pick up the new item and add it to both inventories
-			//See if you can grab the item
-			if (!m_pInterface->Item_Grab(item, itemInfo)) {
-				return false;
-			}
 
-			m_pInterface->Inventory_AddItem(almostEmptyItemIndex, itemInfo);
-			m_Items[almostEmptyItemIndex] = itemInfo;
-			return true;
-		}
-		else {
-			return false;
-		}
-	}
-	//debug render
+	//Get the first free slot and add the item to both inventories
+	UINT slotIndex = GetFreeSlot();
+	bool hasAddedItem = m_pInterface->Inventory_AddItem(slotIndex, itemInfo);
+	m_Items[slotIndex] = itemInfo;
 
-	return false;
+	return hasAddedItem;
 }
 
 bool Inventory::UseItemOfType(eItemType itemType)

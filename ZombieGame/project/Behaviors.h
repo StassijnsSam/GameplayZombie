@@ -181,25 +181,35 @@ namespace BT_Actions
 
 	BehaviorState ShootTarget(Blackboard* pBlackboard) {
 		Inventory* pInventory{};
+		std::vector<EnemyInfo> enemiesInFov{};
 
-		bool dataFound = pBlackboard->GetData("Inventory", pInventory);
+		bool dataFound = pBlackboard->GetData("Inventory", pInventory) &&
+			pBlackboard->GetData("EnemiesInFOV", enemiesInFov);
 
 		if (dataFound == false || pInventory == nullptr) {
 			return BehaviorState::Failure;
 		}
 
-		//Prefer pistol over shotgun, If you have a pistol shoot it, else shoot the shotgun
-		//	Change later on, based on how many enemies are in the FOV
+		//Prefer pistol over shotgun in general
+		eItemType preferredGunType{eItemType::PISTOL};
+		eItemType secondaryGunType{eItemType::SHOTGUN};
+
+		if (enemiesInFov.size() > 1) {
+			//if more than one enemy is in the FOV, prefer a shotgun
+			preferredGunType = eItemType::SHOTGUN;
+			secondaryGunType = eItemType::PISTOL;
+		}
+
 		//	Inventory keeps track of the ammo and will throw away an empty gun automatically
-		if (pInventory->ContainsItemOfType(eItemType::PISTOL)) {
-			bool hasFired = pInventory->UseItemOfType(eItemType::PISTOL);
+		if (pInventory->ContainsItemOfType(preferredGunType)) {
+			bool hasFired = pInventory->UseItemOfType(preferredGunType);
 			if (hasFired) {
 				return BehaviorState::Success;
 			}	
 		}
 		else {
-			if (pInventory->ContainsItemOfType(eItemType::SHOTGUN)) {
-				bool hasFired = pInventory->UseItemOfType(eItemType::SHOTGUN);
+			if (pInventory->ContainsItemOfType(secondaryGunType)) {
+				bool hasFired = pInventory->UseItemOfType(secondaryGunType);
 				if (hasFired) {
 					return BehaviorState::Success;
 				}			
@@ -299,17 +309,17 @@ namespace BT_Actions
 	}
 
 	BehaviorState PickUpClosestItem(Blackboard* pBlackboard) {
-		AgentInfo playerInfo{};
 		EntityInfo closestItem{};
 		Inventory* pInventory{};
 		IExamInterface* pInterface{};
+		std::vector<ItemInfo>* pKnownItems{};
 
-		auto dataFound = pBlackboard->GetData("PlayerInfo", playerInfo) &&
-			pBlackboard->GetData("ClosestItem", closestItem) &&
-			pBlackboard->GetData("Inventory", pInventory) && 
-			pBlackboard->GetData("Interface", pInterface);
+		auto dataFound = pBlackboard->GetData("ClosestItem", closestItem) &&
+			pBlackboard->GetData("Inventory", pInventory) &&
+			pBlackboard->GetData("Interface", pInterface) &&
+			pBlackboard->GetData("KnownItems", pKnownItems);
 
-		if (dataFound == false || pInventory == nullptr || pInterface == nullptr) {
+		if (dataFound == false || pInventory == nullptr || pInterface == nullptr || pKnownItems == nullptr) {
 			return BehaviorState::Failure;
 		}
 
@@ -321,6 +331,19 @@ namespace BT_Actions
 		if (hasPickedup) {
 			//Debug render the inventory (TODO: remove)
 			pInventory->DebugRender();
+
+			//Check if this item was a known item
+			int indexOfKnowItem{ invalid_index };
+			for (int index{}; index < pKnownItems->size(); ++index) {
+				if (closestItem.Location.Distance(pKnownItems->at(index).Location) < 0.1f) {
+					indexOfKnowItem = index;
+				}
+			}
+			//It is a known item, delete it from the known item list
+			if (indexOfKnowItem != invalid_index) {
+				pKnownItems->erase(pKnownItems->begin() + indexOfKnowItem);
+			}
+
 			return BehaviorState::Success;
 		}
 
@@ -365,6 +388,45 @@ namespace BT_Actions
 		//Go towards the new spot
 		return Seek(pBlackboard);
 	}
+
+	BehaviorState RememberItem(Blackboard* pBlackboard) {
+		std::vector<ItemInfo>* pKnownItems{};
+		IExamInterface* pInterface{};
+		EntityInfo closestItem{};
+
+		bool dataFound = pBlackboard->GetData("KnownItems", pKnownItems) &&
+			pBlackboard->GetData("Interface", pInterface) &&
+			pBlackboard->GetData("ClosestItem", closestItem);
+
+		if (dataFound == false || pKnownItems == nullptr || pInterface == nullptr) {
+			return BehaviorState::Failure;
+		}
+
+		//Closest item is empty
+		if (closestItem.EntityHash == 0) {
+			return BehaviorState::Failure;
+		}
+
+		ItemInfo knownItem{};
+		pInterface->Item_GetInfo(closestItem, knownItem);
+
+		//Check to see if it is already in there, by location
+		bool isNewItem{ true };
+		for (const ItemInfo& item : *pKnownItems) {
+			if (item.Location.Distance(closestItem.Location) < 0.1f) {
+				isNewItem = false;
+			}
+		}
+
+		if (isNewItem) {
+			pKnownItems->push_back(knownItem);
+			return BehaviorState::Success;
+		}
+
+		std::cout << "The amount of known items is now: " << pKnownItems->size() << std::endl;
+		
+		return BehaviorState::Failure;
+	}
 }
 
 namespace BT_Conditions
@@ -372,7 +434,7 @@ namespace BT_Conditions
 	bool IsInPurgeZone(Blackboard* pBlackboard) {
 		std::vector<PurgeZoneInfo> purgeZonesInFOV{};
 		AgentInfo playerInfo{};
-		const float bufferZoneSquared{ 25.0f};
+		const float bufferZoneSquared{ 100.0f};
 		
 		bool dataFound = pBlackboard->GetData("PurgeZonesInFOV", purgeZonesInFOV)&&
 			pBlackboard->GetData("PlayerInfo", playerInfo);
@@ -389,7 +451,7 @@ namespace BT_Conditions
 				return true;
 			}
 		}
-		return false;
+		return true;
 	}
 
 	bool IsEnemyInFOV(Blackboard* pBlackboard) {
@@ -460,21 +522,35 @@ namespace BT_Conditions
 	bool ShouldHeal(Blackboard* pBlackboard) {
 		AgentInfo playerInfo{};
 		Inventory* pInventory{};
-		float minimumHealthToHeal{};
+		float maxHealth{};
+		IExamInterface* pInterface{};
 
 		bool dataFound = pBlackboard->GetData("PlayerInfo", playerInfo) && 
 			pBlackboard->GetData("Inventory", pInventory) &&
-			pBlackboard->GetData("MinimumHealthToHeal", minimumHealthToHeal);
+			pBlackboard->GetData("MaxPlayerHealth", maxHealth) &&
+			pBlackboard->GetData("Interface", pInterface);
 
-		if (dataFound == false || pInventory == nullptr) {
+		if (dataFound == false || pInventory == nullptr || pInterface == nullptr) {
 			return false;
 		}
-		//Only if you have a medkit and your health is below the minimum health to heal, you should heal
-		if (pInventory->ContainsItemOfType(eItemType::MEDKIT)) {
-			if (playerInfo.Health < minimumHealthToHeal) {
-				return true;
-			}
+		//If you dont have a medkit, you shouldnt try to heal
+		if (!pInventory->ContainsItemOfType(eItemType::MEDKIT)) {
+			return false;
 		}
+		UINT medkitIndex = pInventory->GetIndexOfItemOfType(eItemType::MEDKIT);
+		if (medkitIndex == invalid_index) {
+			return false;
+		}
+		//Check the medkit charges
+		ItemInfo item{};
+		pInterface->Inventory_GetItem(medkitIndex, item);
+		int medkitCharges = pInterface->Medkit_GetHealth(item);
+
+		//Check so you dont waste any medkit charges
+		if (maxHealth - playerInfo.Health > medkitCharges) {
+			return true;
+		}
+
 		return false;
 	}
 
@@ -496,21 +572,35 @@ namespace BT_Conditions
 	bool ShouldEat(Blackboard* pBlackboard) {
 		AgentInfo playerInfo{};
 		Inventory* pInventory{};
-		float minimumEnergyToEat{};
+		float maxEnergy{};
+		IExamInterface* pInterface{};
 
 		bool dataFound = pBlackboard->GetData("PlayerInfo", playerInfo) &&
 			pBlackboard->GetData("Inventory", pInventory) &&
-			pBlackboard->GetData("MinimumEnergyToEat", minimumEnergyToEat);
+			pBlackboard->GetData("MaxPlayerEnergy", maxEnergy) &&
+			pBlackboard->GetData("Interface", pInterface);
 
-		if (dataFound == false || pInventory == nullptr) {
+		if (dataFound == false || pInventory == nullptr || pInterface == nullptr) {
 			return false;
 		}
-		//Only if you have food and you are below the minimum energy to eat, you should eat
-		if (pInventory->ContainsItemOfType(eItemType::FOOD)) {
-			if (playerInfo.Energy < minimumEnergyToEat) {
-				return true;
-			}
+		//If you dont have food you shouldnt eat
+		if (!pInventory->ContainsItemOfType(eItemType::FOOD)) {
+			return false;
 		}
+		UINT foodIndex = pInventory->GetIndexOfItemOfType(eItemType::FOOD);
+		if (foodIndex == invalid_index) {
+			return false;
+		}
+		//Check the food energy
+		ItemInfo item{};
+		pInterface->Inventory_GetItem(foodIndex, item);
+		int foodEnergy = pInterface->Food_GetEnergy(item);
+
+		//Check so you dont waste any food energy
+		if (maxEnergy - playerInfo.Energy > foodEnergy) {
+			return true;
+		}
+
 		return false;
 	}
 
@@ -661,5 +751,113 @@ namespace BT_Conditions
 
 		return false;
 	}
+
+	bool ShouldPickUpClosestItem(Blackboard* pBlackboard) {
+		EntityInfo closestItem{};
+		Inventory* pInventory{};
+		IExamInterface* pInterface{};
+
+		auto dataFound = pBlackboard->GetData("ClosestItem", closestItem) &&
+			pBlackboard->GetData("Inventory", pInventory) &&
+			pBlackboard->GetData("Interface", pInterface);
+
+		if (dataFound == false || pInventory == nullptr || pInterface == nullptr) {
+			return false;
+		}
+
+		//Closest item is empty
+		if (closestItem.EntityHash == 0) {
+			return false;
+		}
+		
+		return pInventory->ShouldPickupItem(closestItem);
+	}
+
+	bool IsInNeedOfItem(Blackboard* pBlackboard) {
+		Inventory* pInventory{};
+
+		bool dataFound = pBlackboard->GetData("Inventory", pInventory);
+
+		if (dataFound == false || pInventory == nullptr) {
+			return false;
+		}
+
+		std::vector<eItemType> neededItemTypes{};
+
+		if (!HasGun(pBlackboard)) {
+			//set type of item you need to pistol and shotgun
+			neededItemTypes.push_back(eItemType::PISTOL);
+			neededItemTypes.push_back(eItemType::SHOTGUN);
+		}
+
+		if (IsHungry(pBlackboard)) {
+			if (!pInventory->ContainsItemOfType(eItemType::FOOD)) {
+				//set type of item you need to food
+				neededItemTypes.push_back(eItemType::FOOD);
+			}
+		}
+
+		//If you are hurt and have no medkit, you need a medkit
+		if (IsHurt(pBlackboard)) {
+			if (!pInventory->ContainsItemOfType(eItemType::MEDKIT)) {
+				//set type of item you need to medkit
+				neededItemTypes.push_back(eItemType::MEDKIT);
+			}
+		}
+
+		pBlackboard->ChangeData("NeededItemTypes", neededItemTypes);
+
+		if (neededItemTypes.size() > 0) {
+			return true;
+		}
+
+		return false;
+	}
+
+	bool ShouldPickupKnownItem(Blackboard* pBlackboard) {
+		std::vector<ItemInfo>* pKnownItems{};
+		std::vector<eItemType> neededItemTypes{};
+		AgentInfo playerInfo{};
+		float maxItemWalkRange{};
+
+		bool dataFound = pBlackboard->GetData("KnownItems", pKnownItems) &&
+			pBlackboard->GetData("NeededItemTypes", neededItemTypes) &&
+			pBlackboard->GetData("PlayerInfo", playerInfo) &&
+			pBlackboard->GetData("MaxItemWalkRange", maxItemWalkRange);
+
+		if (dataFound == false || pKnownItems == nullptr || neededItemTypes.size() <= 0) {
+			return false;
+		}
+
+		//get the closest known item of the type you need
+		float closestDistance = FLT_MAX;
+		ItemInfo knownItem{};
+		for (eItemType type : neededItemTypes) {
+			for (const ItemInfo& item : *pKnownItems) {
+				if (item.Type == type) {
+					float distance = playerInfo.Position.Distance(item.Location);
+					if (distance < closestDistance) {
+						closestDistance = distance;
+						knownItem = item;
+					}
+				}
+			}
+		}
+		
+		//if the closestdistance is still max, you dont known any items of those types, return false
+		if (abs(closestDistance - FLT_MAX) <= 0.001f) {
+			return false;
+		}
+
+		//if its further than the max walkrange, ignore it
+		if (closestDistance > maxItemWalkRange) {
+			return false;
+		}
+
+		//If you get to here, you should go and pick it up, so set the item location as target
+		pBlackboard->ChangeData("Target", knownItem.Location);
+		return true;
+	}
+
 }
 #endif

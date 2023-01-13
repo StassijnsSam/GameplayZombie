@@ -63,6 +63,7 @@ private:
 	std::vector<HouseInfo> m_HousesInFOV{};
 
 	std::vector<HouseSearch> m_KnownHouses{};
+	std::vector<ItemInfo> m_KnownItems{};
 	WorldSearch* m_pWorldSearch{};
 
 	void ClearData();

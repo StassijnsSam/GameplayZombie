@@ -29,8 +29,8 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBlackboard = new Blackboard();
 	//Make the worldSearch
 	m_pWorldSearch = new WorldSearch(m_pInterface->World_GetInfo());
-	//Add blackboard data
 
+	//Add blackboard data
 	m_pBlackboard->AddData("Interface", m_pInterface);
 	m_pBlackboard->AddData("PlayerInfo", m_pInterface->Agent_GetInfo());
 	m_pBlackboard->AddData("WorldInfo", m_pInterface->World_GetInfo());
@@ -38,8 +38,13 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBlackboard->AddData("Inventory", m_pInventory);
 
 	m_pBlackboard->AddData("EnemiesInFOV", m_EnemiesInFOV);
+
+	//Items
 	m_pBlackboard->AddData("ItemsInFOV", m_ItemsInFOV);
+	m_pBlackboard->AddData("KnownItems", &m_KnownItems);
 	m_pBlackboard->AddData("ClosestItem", EntityInfo{});
+	m_pBlackboard->AddData("NeededItemTypes", std::vector<eItemType>());
+	m_pBlackboard->AddData("MaxItemWalkRange", FLT_MAX);
 
 	//Purge zone
 	m_pBlackboard->AddData("PurgeZonesInFOV", m_PurgeZonesInFOV);
@@ -52,12 +57,10 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 
 	//Health
 	m_pBlackboard->AddData("MaxPlayerHealth", 10.0f);
-	m_pBlackboard->AddData("MinimumHealthToHeal", 7.0f);
 	m_pBlackboard->AddData("IsInDanger", false);
 
 	//Food
 	m_pBlackboard->AddData("MaxPlayerEnergy", 10.0f);
-	m_pBlackboard->AddData("MinimumEnergyToEat", 7.0f);
 
 	//Houses
 	m_pBlackboard->AddData("HousesInFOV", m_HousesInFOV);
@@ -78,28 +81,45 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 				new BehaviorAction(BT_Actions::GetReadyToEscapePurgeZone),
 				new BehaviorAction(BT_Actions::Flee)
 			}),
-			//Enemy spotted
+			//Use items needed to survive
 			new BehaviorSelector({
-				//Combat, face the closest enemy and shoot him while walking away
+				//Use medkit
 				new BehaviorSequence({
-					new BehaviorSequence({
-					new BehaviorConditional(BT_Conditions::IsEnemyInFOV),
-					new BehaviorConditional(BT_Conditions::HasGun),
-					new BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
-					new BehaviorAction(BT_Actions::Face)
-					}),
-					new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::IsHurt),
+					new BehaviorConditional(BT_Conditions::ShouldHeal),
+					new BehaviorAction(BT_Actions::UseMedkit)
+				}),
+				//Eat food
+				new BehaviorSequence({
+					new BehaviorConditional(BT_Conditions::IsHungry),
+					new BehaviorConditional(BT_Conditions::ShouldEat),
+					new BehaviorAction(BT_Actions::EatFood)
+				})
+			}),
+			//Enemy spotted
+			new BehaviorSequence({
+				new BehaviorConditional(BT_Conditions::IsEnemyInFOV),
+				new BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
+				new BehaviorSelector({
+					//If you are facing an enemy, shoot it
+					new BehaviorSequence({	
+						new BehaviorConditional(BT_Conditions::HasGun),
 						new BehaviorConditional(BT_Conditions::IsFacingTarget),
 						new BehaviorAction(BT_Actions::ShootTarget)
-					})
-				}),
-				//If you see an enemy and have no gun, get ready to flee (and later find a weapon)
-				new BehaviorSequence({
-					new BehaviorConditional(BT_Conditions::IsEnemyInFOV),
-					new InvertedBehaviorConditional(BT_Conditions::HasGun),
-					new BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
-					new BehaviorAction(BT_Actions::GetReadyToFlee),
-					new BehaviorAction(BT_Actions::Flee)
+					}),
+					//If you see an enemy and have a gun, face it while walking back
+					new BehaviorSequence({
+						new BehaviorConditional(BT_Conditions::HasGun),
+						new BehaviorAction(BT_Actions::Flee),
+						new BehaviorAction(BT_Actions::Face)
+					}),
+
+					//If you see an enemy and have no gun, get ready to flee (and later find a weapon)
+					new BehaviorSequence({
+						new InvertedBehaviorConditional(BT_Conditions::HasGun),
+						new BehaviorAction(BT_Actions::GetReadyToFlee),
+						new BehaviorAction(BT_Actions::Flee)
+					}),
 				}),
 			}),
 			//Bitten by enemy
@@ -114,7 +134,6 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 				new BehaviorSequence({
 					new BehaviorConditional(BT_Conditions::WasBitten),
 					new BehaviorConditional(BT_Conditions::HasGun),
-					new BehaviorAction(BT_Actions::GetReadyToFlee),
 					new BehaviorAction(BT_Actions::Flee),
 					new BehaviorAction(BT_Actions::Face)
 				}),
@@ -124,21 +143,6 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					new InvertedBehaviorConditional(BT_Conditions::HasGun),
 					new BehaviorAction(BT_Actions::GetReadyToFlee),
 					new BehaviorAction(BT_Actions::Flee)
-				})
-			}),
-			//Use items needed to survive
-			new BehaviorSelector({
-				//Use medkit
-				new BehaviorSequence({
-					new BehaviorConditional(BT_Conditions::IsHurt),
-					new BehaviorConditional(BT_Conditions::ShouldHeal),
-					new BehaviorAction(BT_Actions::UseMedkit)
-				}),
-				//Eat food
-				new BehaviorSequence({
-					new BehaviorConditional(BT_Conditions::IsHungry),
-					new BehaviorConditional(BT_Conditions::ShouldEat),
-					new BehaviorAction(BT_Actions::EatFood)
 				})
 			}),
 			//Look behind you if you were fleeing
@@ -155,22 +159,36 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					})
 			}),
 			//Pickup items
-			new BehaviorSelector({
-				//If an item is within pickup range try to pick it up
-				new BehaviorSequence({
-					new BehaviorConditional(BT_Conditions::IsItemInFOV),
-					new BehaviorConditional(BT_Conditions::IsItemInPickupRange),
-					new BehaviorAction(BT_Actions::SetClosestItemAsTarget),
-					new BehaviorAction(BT_Actions::PickUpClosestItem)
-				}),
-				//If an item is not within pickup range move to it
-				new BehaviorSequence({
-					new BehaviorConditional(BT_Conditions::IsItemInFOV),
-					new BehaviorAction(BT_Actions::SetClosestItemAsTarget),
-					new BehaviorAction(BT_Actions::Seek)
+			new BehaviorSequence({
+				new BehaviorConditional(BT_Conditions::IsItemInFOV),
+				new BehaviorSelector({
+					//If an item is within pickup range try to pick it up
+					new BehaviorSequence({
+						new BehaviorConditional(BT_Conditions::IsItemInPickupRange),
+						new BehaviorAction(BT_Actions::SetClosestItemAsTarget),
+						new BehaviorConditional(BT_Conditions::ShouldPickUpClosestItem),
+						new BehaviorAction(BT_Actions::PickUpClosestItem)
+					}),
+					//If an item is not within pickup range move to it
+					new BehaviorSequence({
+						new BehaviorAction(BT_Actions::SetClosestItemAsTarget),
+						new BehaviorConditional(BT_Conditions::ShouldPickUpClosestItem),
+						new BehaviorAction(BT_Actions::Seek)
+					}),
+					//If you should not pick up the item, save it as a known item
+					new BehaviorSequence({
+						new BehaviorAction(BT_Actions::SetClosestItemAsTarget),
+						new InvertedBehaviorConditional(BT_Conditions::ShouldPickUpClosestItem),
+						new BehaviorAction(BT_Actions::RememberItem)
+					})
 				}),
 			}),
-
+			//Go to known items you need 
+			new BehaviorSequence({
+				new BehaviorConditional(BT_Conditions::IsInNeedOfItem),
+				new BehaviorConditional(BT_Conditions::ShouldPickupKnownItem),
+				new BehaviorAction(BT_Actions::Seek)
+			}),
 			//Explore houses
 			new BehaviorSelector({
 				//If you are currently inside of a house, and should explore it, search all locations

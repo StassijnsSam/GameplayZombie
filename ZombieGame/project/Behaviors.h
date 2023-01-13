@@ -182,23 +182,23 @@ namespace BT_Actions
 
 	BehaviorState SetClosestEnemyAsTarget(Blackboard* pBlackboard) {
 		AgentInfo playerInfo{};
-		std::vector<EnemyInfo> enemiesInFOV{};
+		std::vector<EnemyInfo>* pEnemiesInFOV{};
 
-		bool dataFound = pBlackboard->GetData("EnemiesInFOV", enemiesInFOV) &&
+		bool dataFound = pBlackboard->GetData("EnemiesInFOV", pEnemiesInFOV) &&
 			pBlackboard->GetData("PlayerInfo", playerInfo);
 
-		if (dataFound == false) {
+		if (dataFound == false || pEnemiesInFOV == nullptr) {
 			return BehaviorState::Failure;
 		}
 
 		//If there are no enemies in the FOV, this cant work
-		if (enemiesInFOV.size() <= 0) {
+		if (pEnemiesInFOV->size() <= 0) {
 			return BehaviorState::Failure;
 		}
 
-		EnemyInfo closestEnemy{ enemiesInFOV.at(0) };
+		EnemyInfo closestEnemy{ pEnemiesInFOV->at(0) };
 		float minDistanceSquared{Elite::DistanceSquared(playerInfo.Position, closestEnemy.Location)};
-		for (const EnemyInfo& enemy : enemiesInFOV) {
+		for (const EnemyInfo& enemy : *pEnemiesInFOV) {
 			float distanceSquared{ Elite::DistanceSquared(playerInfo.Position, enemy.Location )};
 			if (distanceSquared < minDistanceSquared) {
 				closestEnemy = enemy;
@@ -213,12 +213,12 @@ namespace BT_Actions
 
 	BehaviorState ShootTarget(Blackboard* pBlackboard) {
 		Inventory* pInventory{};
-		std::vector<EnemyInfo> enemiesInFov{};
+		std::vector<EnemyInfo>* pEnemiesInFov{};
 
 		bool dataFound = pBlackboard->GetData("Inventory", pInventory) &&
-			pBlackboard->GetData("EnemiesInFOV", enemiesInFov);
+			pBlackboard->GetData("EnemiesInFOV", pEnemiesInFov);
 
-		if (dataFound == false || pInventory == nullptr) {
+		if (dataFound == false || pInventory == nullptr || pEnemiesInFov == nullptr) {
 			return BehaviorState::Failure;
 		}
 
@@ -226,7 +226,7 @@ namespace BT_Actions
 		eItemType preferredGunType{eItemType::PISTOL};
 		eItemType secondaryGunType{eItemType::SHOTGUN};
 
-		if (enemiesInFov.size() > 1) {
+		if (pEnemiesInFov->size() > 1) {
 			//if more than one enemy is in the FOV, prefer a shotgun
 			preferredGunType = eItemType::SHOTGUN;
 			secondaryGunType = eItemType::PISTOL;
@@ -312,23 +312,23 @@ namespace BT_Actions
 
 	BehaviorState SetClosestItemAsTarget(Blackboard* pBlackboard) {
 		AgentInfo playerInfo{};
-		std::vector<EntityInfo> itemsInFOV{};
+		std::vector<EntityInfo>* pItemsInFOV{};
 
-		bool dataFound = pBlackboard->GetData("ItemsInFOV", itemsInFOV) &&
+		bool dataFound = pBlackboard->GetData("ItemsInFOV", pItemsInFOV) &&
 			pBlackboard->GetData("PlayerInfo", playerInfo);
 
-		if (dataFound == false) {
+		if (dataFound == false || pItemsInFOV == nullptr) {
 			return BehaviorState::Failure;
 		}
 
 		//If there are no items in the FOV, this cant work
-		if (!(itemsInFOV.size() > 0)) {
+		if (!(pItemsInFOV->size() > 0)) {
 			return BehaviorState::Failure;
 		}
 
-		EntityInfo closestItem{ itemsInFOV.at(0) };
+		EntityInfo closestItem{ pItemsInFOV->at(0) };
 		float minDistanceSquared{ Elite::DistanceSquared(playerInfo.Position, closestItem.Location) };
-		for (const EntityInfo& item : itemsInFOV) {
+		for (const EntityInfo& item : *pItemsInFOV) {
 			float distanceSquared{ Elite::DistanceSquared(playerInfo.Position, item.Location) };
 			if (distanceSquared < minDistanceSquared) {
 				closestItem = item;
@@ -462,19 +462,24 @@ namespace BT_Actions
 namespace BT_Conditions
 {
 	bool IsInPurgeZone(Blackboard* pBlackboard) {
-		std::vector<PurgeZoneInfo> purgeZonesInFOV{};
+		std::vector<PurgeZoneInfo>* pPurgeZonesInFOV{};
 		AgentInfo playerInfo{};
 		const float bufferZoneSquared{ 100.0f};
 		
-		bool dataFound = pBlackboard->GetData("PurgeZonesInFOV", purgeZonesInFOV)&&
+		bool dataFound = pBlackboard->GetData("PurgeZonesInFOV", pPurgeZonesInFOV)&&
 			pBlackboard->GetData("PlayerInfo", playerInfo);
 
-		//If its not found or the vector is empty, there are no purge zones nearby
-		if (dataFound == false || purgeZonesInFOV.empty()) {
+		//If its not found or the vector is empty
+		if (dataFound == false || pPurgeZonesInFOV == nullptr) {
 			return false;
 		}
 
-		for (const PurgeZoneInfo& purgeZone : purgeZonesInFOV) {
+		//There is no purge zones in FOV
+		if (pPurgeZonesInFOV->size() <= 0) {
+			return false;
+		}
+
+		for (const PurgeZoneInfo& purgeZone : *pPurgeZonesInFOV) {
 			if (Elite::DistanceSquared(purgeZone.Center, playerInfo.Position) < (purgeZone.Radius * purgeZone.Radius + bufferZoneSquared)) {
 				//You are inside or close to a purge zone right now
 				pBlackboard->ChangeData("CurrentPurgeZone", purgeZone);
@@ -485,15 +490,15 @@ namespace BT_Conditions
 	}
 
 	bool IsEnemyInFOV(Blackboard* pBlackboard) {
-		std::vector<EnemyInfo> enemiesInFOV{};
+		std::vector<EnemyInfo>* pEnemiesInFOV{};
 
-		bool dataFound = pBlackboard->GetData("EnemiesInFOV", enemiesInFOV);
-		if (dataFound == false) {
+		bool dataFound = pBlackboard->GetData("EnemiesInFOV", pEnemiesInFOV);
+		if (dataFound == false || pEnemiesInFOV == nullptr) {
 			return false;
 		}
 
 		//If this vectors size is bigger than 0 it means there is one or more enemies in the FOV
-		return enemiesInFOV.size() > 0;
+		return pEnemiesInFOV->size() > 0;
 	}
 
 	bool HasGun(Blackboard* pBlackboard) {
@@ -647,15 +652,15 @@ namespace BT_Conditions
 	}
 
 	bool IsItemInFOV(Blackboard* pBlackboard) {
-		std::vector<EntityInfo> itemsInFOV{};
+		std::vector<EntityInfo>* pItemsInFOV{};
 
-		bool dataFound = pBlackboard->GetData("ItemsInFOV", itemsInFOV);
+		bool dataFound = pBlackboard->GetData("ItemsInFOV", pItemsInFOV);
 		if (dataFound == false) {
 			return false;
 		}
 
 		//If this vectors size is bigger than 0 it means there is one or more items in the FOV
-		return itemsInFOV.size() > 0;
+		return pItemsInFOV->size() > 0;
 	}
 
 	bool IsBitten(Blackboard* pBlackboard) {

@@ -37,17 +37,17 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBlackboard->AddData("SteeringOutput", SteeringPlugin_Output{});
 	m_pBlackboard->AddData("Inventory", m_pInventory);
 	m_pBlackboard->AddData("FleeRadius", 60.f);
-	m_pBlackboard->AddData("EnemiesInFOV", m_EnemiesInFOV);
+	m_pBlackboard->AddData("EnemiesInFOV", &m_EnemiesInFOV);
 
 	//Items
-	m_pBlackboard->AddData("ItemsInFOV", m_ItemsInFOV);
+	m_pBlackboard->AddData("ItemsInFOV", &m_ItemsInFOV);
 	m_pBlackboard->AddData("KnownItems", &m_KnownItems);
 	m_pBlackboard->AddData("ClosestItem", EntityInfo{});
 	m_pBlackboard->AddData("NeededItemTypes", std::vector<eItemType>());
 	m_pBlackboard->AddData("MaxItemWalkRange", 300.f);
 
 	//Purge zone
-	m_pBlackboard->AddData("PurgeZonesInFOV", m_PurgeZonesInFOV);
+	m_pBlackboard->AddData("PurgeZonesInFOV", &m_PurgeZonesInFOV);
 	m_pBlackboard->AddData("CurrentPurgeZone", PurgeZoneInfo{});
 
 	m_pBlackboard->AddData("CanRun", m_CanRun);
@@ -433,9 +433,6 @@ void Plugin::UpdateEntitiesFOV()
 			m_PurgeZonesInFOV.push_back(purgeZoneInfo);
 		}
 	}
-	m_pBlackboard->ChangeData("ItemsInFOV", m_ItemsInFOV);
-	m_pBlackboard->ChangeData("EnemiesInFOV", m_EnemiesInFOV);
-	m_pBlackboard->ChangeData("PurgeZonesInFOV", m_PurgeZonesInFOV);
 }
 
 void Plugin::UpdateHousesFOV()

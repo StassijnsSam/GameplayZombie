@@ -23,13 +23,15 @@ namespace BT_Actions
 		IExamInterface* pInterface{};
 		SteeringPlugin_Output steering{};
 		bool canRun{};
+		bool isFleeing{};
 
 		float acceptanceRadius{ 0.1f };
 
 		bool dataFound = pBlackboard->GetData("Target", target) &&
 			pBlackboard->GetData("PlayerInfo", playerInfo) &&
 			pBlackboard->GetData("Interface", pInterface) &&
-			pBlackboard->GetData("CanRun", canRun);
+			pBlackboard->GetData("CanRun", canRun) &&
+			pBlackboard->GetData("IsFleeing", isFleeing);
 
 		if (!dataFound || pInterface == nullptr) {
 			return BehaviorState::Failure;
@@ -39,6 +41,12 @@ namespace BT_Actions
 
 		//If it is close to the target, let him stop
 		if (Elite::DistanceSquared(target, playerInfo.Position) < acceptanceRadius * acceptanceRadius) {
+			//Set fleeing data
+			if (isFleeing) {
+				pBlackboard->ChangeData("IsFleeing", false);
+				pBlackboard->ChangeData("WasFleeing", true);
+				pBlackboard->ChangeData("CanRun", false);
+			}
 			steering.LinearVelocity = { 0, 0 };
 		}
 		else {
@@ -54,42 +62,35 @@ namespace BT_Actions
 
 	BehaviorState Flee(Blackboard* pBlackboard)
 	{
-		Elite::Vector2 target{};
+		Elite::Vector2 fleeTarget{};
 		AgentInfo playerInfo{};
 		IExamInterface* pInterface{};
 		SteeringPlugin_Output steering{};
 		bool canRun{};
+		float fleeRadius{};
 
-		float fleeRadius{ 65.f };
-
-		bool dataFound = pBlackboard->GetData("Target", target) &&
+		bool dataFound = pBlackboard->GetData("FleeTarget", fleeTarget) &&
 			pBlackboard->GetData("PlayerInfo", playerInfo) &&
 			pBlackboard->GetData("Interface", pInterface) &&
-			pBlackboard->GetData("CanRun", canRun);
+			pBlackboard->GetData("CanRun", canRun) &&
+			pBlackboard->GetData("FleeRadius", fleeRadius);
 
 		if (!dataFound || pInterface == nullptr) {
 			return BehaviorState::Failure;
 		}
 
-		target = pInterface->NavMesh_GetClosestPathPoint(target);
+		//Calculate the spot to run to
+		Elite::Vector2 playerPosition{ playerInfo.Position };
 
-		//If it is far enough from the target, let him stop
-		if (Elite::DistanceSquared(target, playerInfo.Position) > fleeRadius * fleeRadius) {
-			//Set isfleeing and wasfleeing
-			pBlackboard->ChangeData("WasFleeing", true);
-			pBlackboard->ChangeData("IsFleeing", false);
-			pBlackboard->ChangeData("CanRun", false);
-			steering.LinearVelocity = { 0, 0 };
-		}
-		else {
-			steering.RunMode = canRun;
-			steering.LinearVelocity = playerInfo.Position - target;
-			steering.LinearVelocity.Normalize();
-			steering.LinearVelocity *= playerInfo.MaxLinearSpeed;
-		}
+		Elite::Vector2 targetToPlayer = playerPosition - fleeTarget;
+		targetToPlayer.Normalize();
 
-		pBlackboard->ChangeData("SteeringOutput", steering);
-		return BehaviorState::Success;
+		Elite::Vector2 newTarget = playerPosition + targetToPlayer * fleeRadius;
+
+		pBlackboard->ChangeData("Target", newTarget);
+		pBlackboard->ChangeData("IsFleeing", true);
+
+		return Seek(pBlackboard);
 	}
 
 	BehaviorState Face(Blackboard* pBlackboard)
@@ -122,6 +123,36 @@ namespace BT_Actions
 		return BehaviorState::Success;
 	}
 
+	BehaviorState FaceBehind(Blackboard* pBlackboard)
+	{
+		Elite::Vector2 target{};
+		AgentInfo playerInfo{};
+		//Get the steering so you will keep moving while facing the target
+		SteeringPlugin_Output steering{};
+
+		bool dataFound = pBlackboard->GetData("Target", target) &&
+			pBlackboard->GetData("PlayerInfo", playerInfo) &&
+			pBlackboard->GetData("SteeringOutput", steering);
+
+		if (dataFound == false) {
+			return BehaviorState::Failure;
+		}
+		//To look behind you, flip the vector
+		const Elite::Vector2 toPlayer{ playerInfo.Position - target};
+
+		//angle between -pi and +pi
+		const float angleTo{ atan2f(toPlayer.y, toPlayer.x) };
+		float angleFrom{ playerInfo.Orientation };
+
+		float deltaAngle = angleTo - angleFrom;
+
+		steering.AutoOrient = false;
+		steering.AngularVelocity = deltaAngle * playerInfo.MaxAngularSpeed;
+
+		pBlackboard->ChangeData("SteeringOutput", steering);
+		return BehaviorState::Success;
+	}
+
 	BehaviorState GetReadyToEscapePurgeZone(Blackboard* pBlackboard) {
 		AgentInfo playerInfo{};
 		PurgeZoneInfo currentPurgeZone{};
@@ -133,7 +164,7 @@ namespace BT_Actions
 			return BehaviorState::Failure;
 		}
 
-		pBlackboard->ChangeData("Target", currentPurgeZone.Center);
+		pBlackboard->ChangeData("FleeTarget", currentPurgeZone.Center);
 		pBlackboard->ChangeData("CanRun", true);
 		
 		return BehaviorState::Success;
@@ -176,6 +207,7 @@ namespace BT_Actions
 		}
 
 		pBlackboard->ChangeData("Target", closestEnemy.Location);
+		pBlackboard->ChangeData("FleeTarget", closestEnemy.Location);
 		return BehaviorState::Success;
 	}
 
@@ -274,7 +306,7 @@ namespace BT_Actions
 		Elite::Vector2 pointBehind = Elite::Vector2(playerInfo.Position.x - distanceFactor * cosf(playerInfo.Orientation),
 			playerInfo.Position.y - distanceFactor * sinf(playerInfo.Orientation));
 
-		pBlackboard->ChangeData("Target", pointBehind);
+		pBlackboard->ChangeData("FleeTarget", pointBehind);
 		return BehaviorState::Success;
 	}
 
@@ -422,8 +454,6 @@ namespace BT_Actions
 			pKnownItems->push_back(knownItem);
 			return BehaviorState::Success;
 		}
-
-		std::cout << "The amount of known items is now: " << pKnownItems->size() << std::endl;
 		
 		return BehaviorState::Failure;
 	}

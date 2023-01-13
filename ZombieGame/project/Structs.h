@@ -27,12 +27,12 @@ struct HouseSearch : public HouseInfo {
 		return *this;
 	}
 
-	float wallThickness{ 4.0f };
+	float wallThickness{ 3.5f };
 
 	bool shouldCheck{ true };
 
 	float timeSinceLooted{};
-	const float minTimeBeforeRecheck{500.f};
+	const float minTimeBeforeRecheck{800.f};
 
 	int minWidthBetweenSearchLocations{};
 	int minHeightBetweenSearchLocations{};

@@ -36,7 +36,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBlackboard->AddData("WorldInfo", m_pInterface->World_GetInfo());
 	m_pBlackboard->AddData("SteeringOutput", SteeringPlugin_Output{});
 	m_pBlackboard->AddData("Inventory", m_pInventory);
-
+	m_pBlackboard->AddData("FleeRadius", 60.f);
 	m_pBlackboard->AddData("EnemiesInFOV", m_EnemiesInFOV);
 
 	//Items
@@ -44,7 +44,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBlackboard->AddData("KnownItems", &m_KnownItems);
 	m_pBlackboard->AddData("ClosestItem", EntityInfo{});
 	m_pBlackboard->AddData("NeededItemTypes", std::vector<eItemType>());
-	m_pBlackboard->AddData("MaxItemWalkRange", FLT_MAX);
+	m_pBlackboard->AddData("MaxItemWalkRange", 300.f);
 
 	//Purge zone
 	m_pBlackboard->AddData("PurgeZonesInFOV", m_PurgeZonesInFOV);
@@ -54,6 +54,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBlackboard->AddData("WasFleeing", false);
 	m_pBlackboard->AddData("IsFleeing", false);
 	m_pBlackboard->AddData("Target", Elite::Vector2{0, 0});
+	m_pBlackboard->AddData("FleeTarget", Elite::Vector2{ 0, 0 });
 
 	//Health
 	m_pBlackboard->AddData("MaxPlayerHealth", 10.0f);
@@ -111,7 +112,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					new BehaviorSequence({
 						new BehaviorConditional(BT_Conditions::HasGun),
 						new BehaviorAction(BT_Actions::Flee),
-						new BehaviorAction(BT_Actions::Face)
+						new BehaviorAction(BT_Actions::FaceBehind)
 					}),
 
 					//If you see an enemy and have no gun, get ready to flee (and later find a weapon)
@@ -135,7 +136,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					new BehaviorConditional(BT_Conditions::WasBitten),
 					new BehaviorConditional(BT_Conditions::HasGun),
 					new BehaviorAction(BT_Actions::Flee),
-					new BehaviorAction(BT_Actions::Face)
+					new BehaviorAction(BT_Actions::FaceBehind)
 				}),
 				//If you were bitten and have no gun, run away
 				new BehaviorSequence({
@@ -155,7 +156,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 				//When you are done fleeing, turn around to see if you are still being followed
 				new BehaviorSequence({
 					new BehaviorConditional(BT_Conditions::WasFleeing),
-					new BehaviorAction(BT_Actions::Face)
+					new BehaviorAction(BT_Actions::FaceBehind)
 					})
 			}),
 			//Pickup items

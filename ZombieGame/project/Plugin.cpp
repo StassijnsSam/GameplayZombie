@@ -44,7 +44,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBlackboard->AddData("KnownItems", &m_KnownItems);
 	m_pBlackboard->AddData("ClosestItem", EntityInfo{});
 	m_pBlackboard->AddData("NeededItemTypes", std::vector<eItemType>());
-	m_pBlackboard->AddData("MaxItemWalkRange", 300.f);
+	m_pBlackboard->AddData("MaxItemWalkRange", 100.f);
 
 	//Purge zone
 	m_pBlackboard->AddData("PurgeZonesInFOV", &m_PurgeZonesInFOV);
@@ -114,8 +114,22 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 						new BehaviorAction(BT_Actions::Flee),
 						new BehaviorAction(BT_Actions::FaceBehind)
 					}),
-
-					//If you see an enemy and have no gun, get ready to flee (and later find a weapon)
+					//If you see an enemy in a house and you have no gun, mark house as unsafe and run
+					new BehaviorSequence({
+						new InvertedBehaviorConditional(BT_Conditions::HasGun),
+						new BehaviorConditional(BT_Conditions::IsInsideHouse),
+						new BehaviorAction(BT_Actions::MarkHouseAsUnsafe),
+						new BehaviorAction(BT_Actions::GetReadyToFlee),
+						new BehaviorAction(BT_Actions::Flee)
+					}),
+					//If there are safe houses nearby hide there
+					new BehaviorSequence({
+						new InvertedBehaviorConditional(BT_Conditions::HasGun),
+						new BehaviorConditional(BT_Conditions::ShouldSearchKnownHouse),
+						new BehaviorAction(BT_Actions::GetReadyToFlee),
+						new BehaviorAction(BT_Actions::SearchHouse)
+					}),
+					//If you see an enemy and have no gun, get ready to flee
 					new BehaviorSequence({
 						new InvertedBehaviorConditional(BT_Conditions::HasGun),
 						new BehaviorAction(BT_Actions::GetReadyToFlee),
@@ -138,13 +152,31 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 					new BehaviorAction(BT_Actions::Flee),
 					new BehaviorAction(BT_Actions::FaceBehind)
 				}),
-				//If you were bitten and have no gun, run away
+				//If you were bitten and have no gun
 				new BehaviorSequence({
 					new BehaviorConditional(BT_Conditions::WasBitten),
 					new InvertedBehaviorConditional(BT_Conditions::HasGun),
-					new BehaviorAction(BT_Actions::GetReadyToFlee),
-					new BehaviorAction(BT_Actions::Flee)
-				})
+					new BehaviorSelector({
+						//If you are inside a house mark it as unsafe and flee
+						new BehaviorSequence({
+							new BehaviorConditional(BT_Conditions::IsInsideHouse),
+							new BehaviorAction(BT_Actions::MarkHouseAsUnsafe),
+							new BehaviorAction(BT_Actions::GetReadyToFlee),
+							new BehaviorAction(BT_Actions::Flee)
+						}),
+						//If there are safe houses nearby hide there
+						new BehaviorSequence({
+							new BehaviorConditional(BT_Conditions::ShouldSearchKnownHouse),
+							new BehaviorAction(BT_Actions::GetReadyToFlee),
+							new BehaviorAction(BT_Actions::SearchHouse)
+						}),
+						//If not, flee
+						new BehaviorSequence({
+							new BehaviorAction(BT_Actions::GetReadyToFlee),
+							new BehaviorAction(BT_Actions::Flee)
+						})
+					})
+				}),
 			}),
 			//Look behind you if you were fleeing
 			new BehaviorSelector({
@@ -206,7 +238,6 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 			}),
 			//Explore world
 			new BehaviorAction(BT_Actions::ExploreWorld),
-
 			//Any fallback behavior (go to current target)
 		})
 	);

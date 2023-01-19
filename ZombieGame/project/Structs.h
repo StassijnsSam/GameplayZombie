@@ -32,7 +32,7 @@ struct HouseSearch : public HouseInfo {
 	bool shouldCheck{ true };
 
 	float timeSinceLooted{};
-	const float minTimeBeforeRecheck{800.f};
+	const float minTimeBeforeRecheck{600.f};
 
 	int minWidthBetweenSearchLocations{};
 	int minHeightBetweenSearchLocations{};
@@ -123,33 +123,36 @@ struct WorldSearch : public WorldInfo {
 	int minHeightBetweenSearchLocations{};
 
 	const float acceptanceRadius{ 3.0f };
-	//6 because this means you will not get anywhere close to the border
-	const int squareAmount{ 4 };
-
 	UINT currentLocationIndex{ 0 };
 
 	std::vector<Elite::Vector2> searchLocations{};
 
 	void GenerateSearchLocations() {
-		//Most of the houses and the loot are at the middle of the map, so you never really want to get to the borders
-		// You start from the center and do a square search, with bigger and bigger squares
+		//Do a Double Square search, small square then big square
 		searchLocations.push_back(Center);
-		for (int index{1}; index < squareAmount; ++index) {
-			//Coordinates of the square
-			Elite::Vector2 bottomLeft{ Center.x - index * minWidthBetweenSearchLocations, Center.y - index * minHeightBetweenSearchLocations};
-			Elite::Vector2 bottomRight{ Center.x + index * minWidthBetweenSearchLocations, Center.y - index * minHeightBetweenSearchLocations };
-			Elite::Vector2 topLeft{ Center.x - index * minWidthBetweenSearchLocations, Center.y + index * minHeightBetweenSearchLocations };
-			Elite::Vector2 topRight{ Center.x + index * minWidthBetweenSearchLocations, Center.y + index * minHeightBetweenSearchLocations };
+		//Coordinates of the square
+		Elite::Vector2 bottomLeft{ Center.x - minWidthBetweenSearchLocations, Center.y - minHeightBetweenSearchLocations};
+		Elite::Vector2 bottomRight{ Center.x + minWidthBetweenSearchLocations, Center.y - minHeightBetweenSearchLocations };
+		Elite::Vector2 topLeft{ Center.x - minWidthBetweenSearchLocations, Center.y + minHeightBetweenSearchLocations };
+		Elite::Vector2 topRight{ Center.x + minWidthBetweenSearchLocations, Center.y + minHeightBetweenSearchLocations };
 			
-			searchLocations.push_back(bottomLeft);
-			searchLocations.push_back(topLeft);
-			searchLocations.push_back(topRight);
-			searchLocations.push_back(bottomRight);
+		searchLocations.push_back(bottomLeft);
+		searchLocations.push_back(topLeft);
+		searchLocations.push_back(topRight);
+		searchLocations.push_back(bottomRight);
 
-			//Make the search locations further out
-			minWidthBetweenSearchLocations += int(Dimensions.x / 2.f) / 20;
-			minHeightBetweenSearchLocations += int(Dimensions.y / 2.f) / 20;
-		}
+		const float distanceFactor{ 4.f };
+
+		Elite::Vector2 bottomLeft2{ Center.x - distanceFactor * minWidthBetweenSearchLocations, Center.y - distanceFactor * minHeightBetweenSearchLocations };
+		Elite::Vector2 bottomRight2{ Center.x + distanceFactor * minWidthBetweenSearchLocations, Center.y - distanceFactor * minHeightBetweenSearchLocations };
+		Elite::Vector2 topLeft2{ Center.x - distanceFactor * minWidthBetweenSearchLocations, Center.y + distanceFactor * minHeightBetweenSearchLocations };
+		Elite::Vector2 topRight2{ Center.x + distanceFactor * minWidthBetweenSearchLocations, Center.y + distanceFactor * minHeightBetweenSearchLocations };
+
+		searchLocations.push_back(bottomRight2);
+		searchLocations.push_back(topRight2);
+		searchLocations.push_back(topLeft2);
+		searchLocations.push_back(bottomLeft2);
+		searchLocations.push_back(bottomRight2);
 	}
 
 	std::vector<Elite::Vector2> GetSearchLocations() {

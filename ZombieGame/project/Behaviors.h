@@ -25,7 +25,7 @@ namespace BT_Actions
 		bool canRun{};
 		bool isFleeing{};
 
-		float acceptanceRadius{ 0.1f };
+		float acceptanceRadius{ 0.01f };
 
 		bool dataFound = pBlackboard->GetData("Target", target) &&
 			pBlackboard->GetData("PlayerInfo", playerInfo) &&
@@ -171,11 +171,22 @@ namespace BT_Actions
 	}
 
 	BehaviorState GetReadyToFlee(Blackboard* pBlackboard) {
+		AgentInfo playerInfo{};
+
+		bool dataFound = pBlackboard->GetData("PlayerInfo", playerInfo);
+
+		if (dataFound == false) {
+			return BehaviorState::Failure;
+		}
+
+		float stamina = playerInfo.Stamina;
+
 		pBlackboard->ChangeData("IsFleeing", true);
 		pBlackboard->ChangeData("WasFleeing", false);
-		pBlackboard->ChangeData("CanRun", true);
-
-		//Set sprint based on health, what type of enemy is closeby etc
+		//only sprint if stamina is high enough!
+		if (stamina > 3.0f) {
+			pBlackboard->ChangeData("CanRun", true);
+		}
 
 		return BehaviorState::Success;
 	}
@@ -366,7 +377,7 @@ namespace BT_Actions
 
 			//Check if this item was a known item
 			int indexOfKnowItem{ invalid_index };
-			for (int index{}; index < pKnownItems->size(); ++index) {
+			for (int index{}; index < int(pKnownItems->size()); ++index) {
 				if (closestItem.Location.Distance(pKnownItems->at(index).Location) < 0.1f) {
 					indexOfKnowItem = index;
 				}
@@ -456,6 +467,24 @@ namespace BT_Actions
 		}
 		
 		return BehaviorState::Failure;
+	}
+
+	BehaviorState MarkHouseAsUnsafe(Blackboard* pBlackboard) {
+		HouseSearch* pCurrentHouse{};
+
+		bool dataFound = pBlackboard->GetData("CurrentHouse", pCurrentHouse);
+
+		if (dataFound == false || pCurrentHouse == nullptr) {
+			return BehaviorState::Failure;
+		}
+
+		const float dangerTime{ 200.f };
+
+		//Do not check the house
+		pCurrentHouse->shouldCheck = false;
+		pCurrentHouse->timeSinceLooted = pCurrentHouse->minTimeBeforeRecheck - dangerTime;
+		
+		return BehaviorState::Success;
 	}
 }
 

@@ -44,7 +44,7 @@ private:
 	float m_MaxWasFleeingTime{ 2.0f };
 	float m_WasFleeingTimer{ m_MaxWasFleeingTime };
 
-	float m_MaxIsFleeingTime{ 2.0f };
+	float m_MaxIsFleeingTime{ 3.0f };
 	float m_IsFleeingTimer{ m_MaxIsFleeingTime };
 
 	float m_MaxRunningTime{ 1.3f };

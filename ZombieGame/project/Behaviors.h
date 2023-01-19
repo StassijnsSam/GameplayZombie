@@ -670,11 +670,18 @@ namespace BT_Conditions
 
 	bool WasBitten(Blackboard* pBlackboard) {
 		bool isInDanger{};
+		AgentInfo playerInfo{};
 
-		bool dataFound = pBlackboard->GetData("IsInDanger", isInDanger);
+		bool dataFound = pBlackboard->GetData("IsInDanger", isInDanger) &&
+			pBlackboard->GetData("AgentInfo", playerInfo);
 
 		if (dataFound == false) {
 			return false;
+		}
+
+		if (playerInfo.WasBitten) {
+			pBlackboard->ChangeData("IsInDanger", true);
+			return true;
 		}
 
 		return isInDanger;

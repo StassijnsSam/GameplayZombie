@@ -673,7 +673,7 @@ namespace BT_Conditions
 		AgentInfo playerInfo{};
 
 		bool dataFound = pBlackboard->GetData("IsInDanger", isInDanger) &&
-			pBlackboard->GetData("AgentInfo", playerInfo);
+			pBlackboard->GetData("PlayerInfo", playerInfo);
 
 		if (dataFound == false) {
 			return false;
